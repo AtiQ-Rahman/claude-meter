@@ -1,0 +1,30 @@
+body { width: auto; max-width: 640px; margin: 0 auto; padding: 24px 16px 48px; }
+h1 { font-size: 20px; }
+h2 { font-size: 14px; margin: 0 0 10px; }
+section { padding: 16px 0; border-top: 1px solid var(--line); }
+
+.field, .check { display: block; margin: 8px 0; }
+input[type="number"] { width: 64px; }
+input, select {
+  font: inherit;
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 3px 6px;
+}
+input[type="checkbox"] { margin-right: 6px; }
+input[type="range"] { vertical-align: middle; width: 200px; }
+.buttons { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+
+pre {
+  max-height: 260px;
+  overflow: auto;
+  padding: 10px;
+  border-radius: 6px;
+  background: var(--track);
+  font-size: 11px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+#diag-status { white-space: pre-line; margin-bottom: 8px; }

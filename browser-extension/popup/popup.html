@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Claude Meter</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Claude Meter</h1>
+      <div id="org" class="muted small"></div>
+    </div>
+    <button id="refresh" class="icon" title="Refresh now" aria-label="Refresh now">&#x21bb;</button>
+  </header>
+
+  <main id="windows"></main>
+
+  <section id="error" hidden>
+    <p id="error-text"></p>
+    <button id="login" hidden>Open claude.ai</button>
+  </section>
+
+  <footer>
+    <span id="updated" class="muted small"></span>
+    <span class="links">
+      <a href="#" id="open-usage">Usage page</a>
+      <a href="#" id="open-options">Settings</a>
+    </span>
+  </footer>
+
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

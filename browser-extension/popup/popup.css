@@ -1,0 +1,88 @@
+:root {
+  --bg: #ffffff;
+  --fg: #1f2328;
+  --muted: #6b7280;
+  --track: #e5e7eb;
+  --line: #e5e7eb;
+  --ok: #2e7d32;
+  --warn: #b7791f;
+  --crit: #d32f2f;
+  --accent: #c96442;
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1f1f1f;
+    --fg: #ececec;
+    --muted: #9ca3af;
+    --track: #3a3a3a;
+    --line: #333333;
+    --ok: #8fd18f;
+    --warn: #f0c05a;
+    --crit: #ff6b6b;
+    --accent: #e08a68;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  width: 320px;
+  padding: 14px 16px 12px;
+  background: var(--bg);
+  color: var(--fg);
+  font: 13px/1.4 system-ui, -apple-system, "Segoe UI", Ubuntu, sans-serif;
+}
+
+header, footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+header { margin-bottom: 12px; }
+h1 { margin: 0; font-size: 15px; }
+.muted { color: var(--muted); }
+.small { font-size: 11px; }
+
+button {
+  font: inherit;
+  color: var(--fg);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+button:hover { border-color: var(--muted); }
+button.icon { font-size: 16px; line-height: 1; padding: 4px 8px; }
+button.spinning { animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.window { padding: 10px 0; border-top: 1px solid var(--line); }
+.window:first-child { border-top: none; padding-top: 0; }
+
+.row { display: flex; justify-content: space-between; align-items: baseline; }
+.label { font-weight: 600; }
+.pct { font-weight: 700; font-variant-numeric: tabular-nums; }
+.pct.ok { color: var(--ok); }
+.pct.warn { color: var(--warn); }
+.pct.crit { color: var(--crit); }
+
+.track { height: 8px; margin: 6px 0; border-radius: 4px; background: var(--track); overflow: hidden; }
+.fill { height: 100%; border-radius: 4px; }
+.fill.ok { background: var(--ok); }
+.fill.warn { background: var(--warn); }
+.fill.crit { background: var(--crit); }
+
+.forecast { margin-top: 2px; }
+.forecast.warn { color: var(--warn); }
+
+#error { padding: 8px 0 4px; }
+#error p { margin: 0 0 8px; }
+
+footer { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--line); }
+.links a { color: var(--accent); text-decoration: none; margin-left: 10px; font-size: 12px; }
+.links a:hover { text-decoration: underline; }

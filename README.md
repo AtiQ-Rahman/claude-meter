@@ -17,6 +17,10 @@ Click the indicator for progress bars, time until each limit resets, and when th
 
 > Unofficial community project. Not affiliated with or endorsed by Anthropic.
 
+## Using claude.ai in the browser instead?
+
+The GNOME extension needs Claude Code. If you use claude.ai in Chrome, Brave or another Chromium browser, see the [browser extension](browser-extension/): the same limits, alerts with sound, and a pace forecast in your toolbar.
+
 ## How it works
 
 Claude Code passes usage data, including your rate limits, to its [status line](https://docs.claude.com/en/docs/claude-code/statusline) command. `statusline.sh` saves that data to `~/.cache/claude-meter/usage.json`, and the GNOME extension reads the file every 10 seconds.
