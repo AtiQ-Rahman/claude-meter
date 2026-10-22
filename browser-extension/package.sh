@@ -1,10 +1,23 @@
 #!/usr/bin/env bash
-# Build the zip to upload to the Chrome Web Store: dist/usage-meter-for-claude-<version>.zip
+# Build the extension zips in dist/:
+#   usage-meter-for-claude-<version>.zip           GitHub release: unzips to one folder for "Load unpacked"
+#   usage-meter-for-claude-<version>-webstore.zip  Chrome Web Store: manifest.json at the zip root
 set -euo pipefail
 cd "$(dirname "$0")"
+FILES=(manifest.json src popup options offscreen content sounds icons)
 version=$(jq -r .version manifest.json)
-out="../dist/usage-meter-for-claude-$version.zip"
-mkdir -p ../dist
-rm -f "$out"
-zip -qr "$out" manifest.json src popup options offscreen content sounds icons
-echo "Built $out"
+dist=$(realpath ../dist 2>/dev/null || true)
+mkdir -p ../dist && dist=$(realpath ../dist)
+release="$dist/usage-meter-for-claude-$version.zip"
+store="$dist/usage-meter-for-claude-$version-webstore.zip"
+rm -f "$release" "$store"
+
+stage=$(mktemp -d)
+trap 'rm -rf "$stage"' EXIT
+mkdir "$stage/usage-meter-for-claude"
+cp -r "${FILES[@]}" "$stage/usage-meter-for-claude/"
+(cd "$stage" && zip -qr "$release" usage-meter-for-claude)
+zip -qr "$store" "${FILES[@]}"
+
+echo "Built $release"
+echo "Built $store"

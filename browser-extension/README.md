@@ -22,10 +22,10 @@ Thresholds, sounds, volume, quiet hours, the badge, the icon ring and the page m
 
 ## Install (developer mode)
 
-1. Download or clone this repository.
+1. Download `usage-meter-for-claude-<version>.zip` from the [latest release](https://github.com/AtiQ-Rahman/claude-meter/releases) (not "Source code") and unzip it.
 2. Open `chrome://extensions` (Brave: `brave://extensions`, Edge: `edge://extensions`).
 3. Turn on **Developer mode**.
-4. Click **Load unpacked** and select the `browser-extension` folder.
+4. Click **Load unpacked** and select the unzipped `usage-meter-for-claude` folder. (From a clone of this repository, select the `browser-extension` folder instead.)
 5. Make sure you are logged in to claude.ai, then click the extension icon in the toolbar. Pin it to keep the meter visible.
 
 ## Show it in the GNOME top bar
@@ -55,4 +55,4 @@ claude.ai does not document this data, so it can change without notice. If the p
 
 ## Publishing
 
-`./package.sh` builds `dist/usage-meter-for-claude-<version>.zip` for the Chrome Web Store. The privacy policy for the listing is [PRIVACY.md](PRIVACY.md).
+`./package.sh` builds two zips in `dist/`: `usage-meter-for-claude-<version>.zip` for GitHub releases (unzips to one folder for Load unpacked) and `usage-meter-for-claude-<version>-webstore.zip` for the Chrome Web Store. The privacy policy for the listing is [PRIVACY.md](PRIVACY.md).
