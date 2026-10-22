@@ -1,0 +1,17 @@
+.claude-meter-panel { spacing: 6px; }
+.claude-meter-icon { color: #d97757; font-weight: bold; }
+.claude-meter-key { color: rgba(255, 255, 255, 0.6); }
+.claude-meter-ok { color: #8fd18f; font-weight: bold; }
+.claude-meter-warn { color: #f0c05a; font-weight: bold; }
+.claude-meter-crit { color: #ff6b6b; font-weight: bold; }
+.claude-meter-stale { color: rgba(255, 255, 255, 0.45); }
+
+.claude-meter-row { spacing: 4px; min-width: 300px; }
+.claude-meter-row-title { font-weight: bold; }
+.claude-meter-row-sub { color: rgba(255, 255, 255, 0.6); font-size: 0.9em; }
+.claude-meter-track { height: 8px; border-radius: 4px; background-color: rgba(255, 255, 255, 0.15); }
+.claude-meter-fill { height: 8px; border-radius: 4px; }
+.claude-meter-fill-ok { background-color: #8fd18f; }
+.claude-meter-fill-warn { background-color: #f0c05a; }
+.claude-meter-fill-crit { background-color: #ff6b6b; }
+.claude-meter-footer { color: rgba(255, 255, 255, 0.5); font-size: 0.85em; }

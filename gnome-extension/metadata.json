@@ -1,0 +1,8 @@
+{
+  "uuid": "claude-meter@atiq-rahman.github.io",
+  "name": "Claude Meter",
+  "description": "Live Claude session (5h) and weekly usage in the top bar. Data comes from the Claude Code status line cache.",
+  "shell-version": ["42"],
+  "url": "https://github.com/AtiQ-Rahman/claude-meter",
+  "version": 1
+}
