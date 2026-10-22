@@ -10,8 +10,8 @@ GREEN=$'\e[32m'; YELLOW=$'\e[33m'; RED=$'\e[31m'; CYAN=$'\e[36m'
 
 color_for() { # pct -> color
   local p=${1%.*}
-  if   (( p >= 85 )); then printf '%s' "$RED"
-  elif (( p >= 60 )); then printf '%s' "$YELLOW"
+  if   (( p >= 90 )); then printf '%s' "$RED"
+  elif (( p >= 80 )); then printf '%s' "$YELLOW"
   else printf '%s' "$GREEN"; fi
 }
 

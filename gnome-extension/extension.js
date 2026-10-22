@@ -5,16 +5,22 @@ const { GObject, St, GLib, Clutter } = imports.gi;
 const Main = imports.ui.main;
 const PanelMenu = imports.ui.panelMenu;
 const PopupMenu = imports.ui.popupMenu;
+const MessageTray = imports.ui.messageTray;
 const ByteArray = imports.byteArray;
 
 const CACHE_FILE = GLib.build_filenamev([GLib.get_user_cache_dir(), 'claude-meter', 'usage.json']);
 const CONFIG_DIR = GLib.build_filenamev([GLib.get_user_config_dir(), 'claude-meter']);
 const CONFIG_FILE = GLib.build_filenamev([CONFIG_DIR, 'settings.json']);
-const DEFAULT_CONFIG = { showSession: true, showWeekly: true, position: 'right' };
+const ALERTS_FILE = GLib.build_filenamev([GLib.get_user_cache_dir(), 'claude-meter', 'alerts.json']);
+const DEFAULT_CONFIG = { showSession: true, showWeekly: true, position: 'right', alerts: true };
 const POSITIONS = [['left', 'Left'], ['center', 'Center'], ['right', 'Right']];
 const REFRESH_SECONDS = 10;
 const STALE_SECONDS = 15 * 60;
 const BAR_WIDTH = 300;
+const WARN_PCT = 80;
+const CRIT_PCT = 90;
+const EVERY_PCT_FROM = 95;
+const SOUND_DIRS = ['Yaru', 'freedesktop'].map(theme => `/usr/share/sounds/${theme}/stereo`);
 
 function loadConfig() {
     try {
@@ -22,6 +28,42 @@ function loadConfig() {
         if (ok) return Object.assign({}, DEFAULT_CONFIG, JSON.parse(ByteArray.toString(bytes)));
     } catch (e) {}
     return Object.assign({}, DEFAULT_CONFIG);
+}
+
+function loadAlerts() {
+    try {
+        const [ok, bytes] = GLib.file_get_contents(ALERTS_FILE);
+        if (ok) return JSON.parse(ByteArray.toString(bytes));
+    } catch (e) {}
+    return {};
+}
+
+function saveAlerts(alerts) {
+    try {
+        GLib.file_set_contents(ALERTS_FILE, JSON.stringify(alerts));
+    } catch (e) {
+        logError(e, 'claude-meter: could not save alert state');
+    }
+}
+
+// Alert steps: 80, 90, then every percent from 95. 0 means no alert yet.
+function alertStep(pct) {
+    if (pct >= EVERY_PCT_FROM) return Math.min(pct, 100);
+    if (pct >= CRIT_PCT) return CRIT_PCT;
+    if (pct >= WARN_PCT) return WARN_PCT;
+    return 0;
+}
+
+function playSound(name) {
+    const file = SOUND_DIRS.map(dir => `${dir}/${name}.oga`)
+        .find(f => GLib.file_test(f, GLib.FileTest.EXISTS));
+    try {
+        // paplay plays even when desktop event sounds are turned off.
+        if (!file) throw new Error(`no sound file for ${name}`);
+        GLib.spawn_async(null, ['paplay', file], null, GLib.SpawnFlags.SEARCH_PATH, null);
+    } catch (e) {
+        global.display.get_sound_player().play_from_theme(name, 'Claude Meter alert', null);
+    }
 }
 
 function saveConfig(config) {
@@ -40,8 +82,8 @@ function keepMenuOpen(item) {
 }
 
 function level(pct) {
-    if (pct >= 85) return 'crit';
-    if (pct >= 60) return 'warn';
+    if (pct >= CRIT_PCT) return 'crit';
+    if (pct >= WARN_PCT) return 'warn';
     return 'ok';
 }
 
@@ -112,8 +154,10 @@ class Indicator extends PanelMenu.Button {
     _init(config, onMove) {
         super._init(0.0, 'Claude Meter');
         this._config = config;
+        this._alerts = loadAlerts();
+        this._notes = {};
 
-        const box = new St.BoxLayout({ style_class: 'claude-meter-panel', y_align: Clutter.ActorAlign.CENTER });
+        const box = this._box = new St.BoxLayout({ style_class: 'claude-meter-panel', y_align: Clutter.ActorAlign.CENTER });
         box.add_child(new St.Label({ text: '✳', style_class: 'claude-meter-icon', y_align: Clutter.ActorAlign.CENTER }));
         this._sKey = new St.Label({ text: 'S', style_class: 'claude-meter-key', y_align: Clutter.ActorAlign.CENTER });
         this._sLabel = new St.Label({ text: '--', y_align: Clutter.ActorAlign.CENTER });
@@ -139,6 +183,9 @@ class Indicator extends PanelMenu.Button {
         const wSwitch = keepMenuOpen(new PopupMenu.PopupSwitchMenuItem('Show Week (W)', config.showWeekly));
         wSwitch.connect('toggled', (_i, on) => this._setOption('showWeekly', on));
         settings.menu.addMenuItem(wSwitch);
+        const aSwitch = keepMenuOpen(new PopupMenu.PopupSwitchMenuItem('Usage alerts (sound)', config.alerts));
+        aSwitch.connect('toggled', (_i, on) => this._setOption('alerts', on));
+        settings.menu.addMenuItem(aSwitch);
         settings.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem('Position in top bar'));
         for (const [pos, name] of POSITIONS) {
             const item = new PopupMenu.PopupMenuItem(name);
@@ -201,6 +248,11 @@ class Indicator extends PanelMenu.Button {
 
         this._setPanel(this._sLabel, s, stale);
         this._setPanel(this._wLabel, w, stale);
+        const crit = !stale && ((this._config.showSession && s && s.pct >= CRIT_PCT) ||
+                                (this._config.showWeekly && w && w.pct >= CRIT_PCT));
+        this._box.style_class = crit ? 'claude-meter-panel claude-meter-panel-crit' : 'claude-meter-panel';
+        this._checkAlert('five_hour', 'session', s, now, false);
+        this._checkAlert('seven_day', 'weekly', w, now, true);
         this._sessionRow.update(s, now, false);
         this._weekRow.update(w, now, true);
         this._footer.label.text = age == null
@@ -208,7 +260,51 @@ class Indicator extends PanelMenu.Button {
             : `Updated ${fmtDuration(age)} ago${stale ? ' - open Claude Code to refresh' : ''}`;
     }
 
+    _checkAlert(key, name, state, now, withDay) {
+        if (!state || !state.reset) return;
+        const prev = this._alerts[key];
+        // resets_at identifies the window; allow some drift between reports.
+        const sameWindow = prev && Math.abs(prev.window - state.reset) < 3600;
+        const last = sameWindow ? prev.step : 0;
+        const step = alertStep(state.pct);
+        if (step > last && this._config.alerts) {
+            const critical = step >= CRIT_PCT;
+            playSound(critical ? 'dialog-error' : 'dialog-warning');
+            this._notify(key, `Claude ${name} usage at ${state.pct}%`,
+                `Resets in ${fmtDuration(state.reset - now)} (${fmtClock(state.reset, withDay)})`, critical);
+        }
+        if (step > last || !sameWindow) {
+            this._alerts[key] = { window: state.reset, step };
+            saveAlerts(this._alerts);
+        }
+    }
+
+    // One notification per window type, updated in place as usage climbs.
+    _notify(key, title, body, critical) {
+        if (!this._source) {
+            this._source = new MessageTray.Source('Claude Meter', 'dialog-warning-symbolic');
+            this._source.connect('destroy', () => {
+                this._source = null;
+                this._notes = {};
+            });
+            Main.messageTray.add(this._source);
+        }
+        let note = this._notes[key];
+        if (note) {
+            note.update(title, body);
+        } else {
+            note = new MessageTray.Notification(this._source, title, body);
+            note.connect('destroy', () => {
+                if (this._notes[key] === note) delete this._notes[key];
+            });
+            this._notes[key] = note;
+        }
+        note.setUrgency(critical ? MessageTray.Urgency.CRITICAL : MessageTray.Urgency.HIGH);
+        this._source.showNotification(note);
+    }
+
     destroy() {
+        if (this._source) this._source.destroy();
         if (this._timer) {
             GLib.source_remove(this._timer);
             this._timer = null;

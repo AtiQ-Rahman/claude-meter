@@ -10,7 +10,8 @@ Live Claude usage in your GNOME top bar, like a system monitor for your Claude l
 
 - **S**: session usage (the rolling 5-hour limit)
 - **W**: weekly usage (the 7-day limit)
-- Colors: green below 60%, yellow from 60%, red from 85%
+- Colors: green below 80%, yellow from 80%, red from 90%
+- Alerts with sound at 80% and 90%, then at every percent from 95%
 
 Click the indicator for progress bars, time until each limit resets, and when the data was last updated.
 
@@ -47,14 +48,29 @@ The installer:
 
 Keep the cloned folder where it is. The status line and the extension both point to it.
 
+## Alerts
+
+When session or weekly usage crosses a threshold, Claude Meter plays a sound and shows a notification:
+
+| Usage | Sound | Notification |
+| --- | --- | --- |
+| 80% | warning | normal |
+| 90% | alert | stays until you dismiss it, and the indicator turns red |
+| 95%, 96%, ... 100% | alert, every percent | updated with the new value |
+
+![Alerts at 81%, 91%, 96% and 97% session usage](alerts.gif)
+
+Each alert fires once per limit window, and the count starts over when the limit resets. Sounds play through `paplay`, so they play even when desktop event sounds are turned off. Turn alerts off with **Usage alerts (sound)** in Settings.
+
 ## Settings
 
 Open the indicator and go to **Settings**:
 
 - **Show Session (S)** / **Show Week (W)**: show or hide each value in the top bar
+- **Usage alerts (sound)**: turn alerts on or off (on by default)
 - **Position in top bar**: Left, Center or Right
 
-![Toggling Session and Week on and off from the Settings menu](demo.gif)
+![Toggling Session, Week and alerts on and off from the Settings menu](demo.gif)
 
 Settings are saved in `~/.config/claude-meter/settings.json`.
 

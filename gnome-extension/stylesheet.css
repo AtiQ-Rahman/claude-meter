@@ -15,3 +15,4 @@
 .claude-meter-fill-warn { background-color: #f0c05a; }
 .claude-meter-fill-crit { background-color: #ff6b6b; }
 .claude-meter-footer { color: rgba(255, 255, 255, 0.5); font-size: 0.85em; }
+.claude-meter-panel-crit { background-color: rgba(255, 70, 70, 0.3); border-radius: 10px; padding: 0 8px; }
