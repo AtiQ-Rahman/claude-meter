@@ -2,13 +2,30 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Claude Meter settings</title>
+  <title>Usage Meter for Claude: settings</title>
   <link rel="stylesheet" href="../popup/popup.css">
   <link rel="stylesheet" href="options.css">
 </head>
 <body>
-  <h1>Claude Meter settings</h1>
-  <p class="muted">Changes save automatically.</p>
+  <h1>Usage Meter for Claude</h1>
+  <p class="muted">Changes save automatically. Unofficial, not affiliated with Anthropic.</p>
+
+  <section>
+    <h2>Last 7 days</h2>
+    <div id="chart" class="chart">
+      <div class="legend">
+        <span><i class="swatch s1"></i>Session (5 hours)</span>
+        <span><i class="swatch s2"></i>Week (7 days)</span>
+      </div>
+      <svg id="chart-svg" viewBox="0 0 600 200" role="img" aria-label="Session and weekly usage over the last 7 days"></svg>
+      <div id="chart-tip" class="tip" hidden></div>
+      <p id="chart-empty" class="muted small" hidden>The chart fills in as the meter takes readings (one point every 15 minutes).</p>
+    </div>
+    <details>
+      <summary class="small">Daily peaks as a table</summary>
+      <table id="chart-table"><thead><tr><th>Day</th><th>Session peak</th><th>Week</th></tr></thead><tbody></tbody></table>
+    </details>
+  </section>
 
   <section>
     <h2>Alerts</h2>
@@ -25,6 +42,9 @@
     <h2>Sound</h2>
     <label class="check"><input type="checkbox" data-key="sound"> Play a sound with alerts</label>
     <label class="field">Volume <input type="range" data-key="volume" min="0" max="1" step="0.05"></label>
+    <label class="check"><input type="checkbox" data-key="quietHours"> Quiet hours from
+      <input type="time" data-key="quietStart"> to <input type="time" data-key="quietEnd">
+      <span class="muted small">notifications still show, without sound</span></label>
     <div class="buttons">
       <button data-sound="warn">Test warning</button>
       <button data-sound="crit">Test critical</button>
@@ -34,11 +54,14 @@
 
   <section>
     <h2>Display</h2>
+    <label class="check"><input type="checkbox" data-key="iconRing"> Toolbar icon shows a live usage ring</label>
+    <label class="check"><input type="checkbox" data-key="pageMeter"> Show a small meter in the corner of claude.ai</label>
     <label class="field">Toolbar badge shows
       <select data-key="badge">
         <option value="max">Highest limit</option>
         <option value="five_hour">Session</option>
         <option value="seven_day">Week</option>
+        <option value="none">Nothing (ring only)</option>
       </select>
     </label>
     <label class="field">Check every <input type="number" data-key="pollMinutes" min="1" max="60"> minutes
@@ -51,6 +74,17 @@
   </section>
 
   <section>
+    <h2>Linux top bar (GNOME)</h2>
+    <p class="small">Show these readings in the <a href="https://github.com/AtiQ-Rahman/claude-meter" target="_blank" rel="noopener">Claude Meter</a> GNOME extension, no Claude Code needed.</p>
+    <label class="check"><input type="checkbox" id="gnome-toggle"> Send readings to the GNOME top bar</label>
+    <ol class="small">
+      <li>Install Claude Meter, then run <code id="gnome-cmd"></code> in its folder.</li>
+      <li>Restart the browser, turn this on, and press Test.</li>
+    </ol>
+    <div class="buttons"><button id="gnome-test">Test connection</button> <span id="gnome-status" class="small"></span></div>
+  </section>
+
+  <section>
     <h2>Diagnostics</h2>
     <p class="muted small">If the meter shows an error, this is what claude.ai returned. Nothing here leaves your browser.</p>
     <div id="diag-status"></div>
@@ -59,5 +93,6 @@
   </section>
 
   <script type="module" src="options.js"></script>
+  <script type="module" src="chart.js"></script>
 </body>
 </html>

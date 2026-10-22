@@ -9,9 +9,15 @@ export const DEFAULTS = {
   notifyOnReset: true,  // tell me when a limit I was warned about resets
   forecastAlert: true,  // warn when the current pace hits 100% before reset
   forecastMinutes: 30,  // ...and that will happen within this many minutes
-  badge: 'max',         // 'max' | 'five_hour' | 'seven_day'
+  quietHours: false,    // no sound between quietStart and quietEnd (notifications still show)
+  quietStart: '22:00',
+  quietEnd: '08:00',
+  badge: 'max',         // 'max' | 'five_hour' | 'seven_day' | 'none'
+  iconRing: true,       // toolbar icon is a live ring of the badge value
+  pageMeter: true,      // small meter in the corner of claude.ai
   pollMinutes: 2,
   orgId: '',            // empty: pick the subscription org automatically
+  gnomeBridge: false,   // also send readings to the Claude Meter GNOME extension
 };
 
 export async function getSettings() {

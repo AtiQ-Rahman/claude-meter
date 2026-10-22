@@ -1,2 +1,4 @@
 .last-input.json
 *.tmp
+dist/
+__pycache__/

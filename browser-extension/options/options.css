@@ -28,3 +28,32 @@ pre {
   word-break: break-all;
 }
 #diag-status { white-space: pre-line; margin-bottom: 8px; }
+
+input[type="time"] { width: auto; }
+code { font-size: 12px; padding: 1px 5px; border-radius: 4px; background: var(--track); user-select: all; }
+ol { padding-left: 18px; }
+
+/* History chart. Series colors are the validated categorical slots 1 and 2. */
+.chart { --s1: #2a78d6; --s2: #eb6834; --grid: #e5e7eb; position: relative; }
+@media (prefers-color-scheme: dark) { .chart { --s1: #3987e5; --s2: #d95926; --grid: #333333; } }
+.legend { display: flex; gap: 16px; font-size: 12px; margin-bottom: 6px; }
+.swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+.swatch.s1 { background: var(--s1); }
+.swatch.s2 { background: var(--s2); }
+#chart-svg { width: 100%; height: auto; display: block; }
+#chart-svg .grid { stroke: var(--grid); stroke-width: 1; }
+#chart-svg .axis { fill: var(--muted); font-size: 10px; }
+#chart-svg .line { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+#chart-svg .s1 { stroke: var(--s1); }
+#chart-svg .s2 { stroke: var(--s2); }
+#chart-svg .cross { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; }
+#chart-svg .dot { stroke: var(--bg); stroke-width: 2; }
+#chart-svg .dot.s1 { fill: var(--s1); }
+#chart-svg .dot.s2 { fill: var(--s2); }
+.tip {
+  position: absolute; pointer-events: none; padding: 6px 8px; border-radius: 6px;
+  background: var(--bg); border: 1px solid var(--line); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  font-size: 11px; white-space: nowrap;
+}
+table { border-collapse: collapse; font-size: 12px; margin-top: 6px; }
+th, td { text-align: left; padding: 3px 12px 3px 0; border-bottom: 1px solid var(--line); }

@@ -19,7 +19,7 @@ Click the indicator for progress bars, time until each limit resets, and when th
 
 ## Using claude.ai in the browser instead?
 
-The GNOME extension needs Claude Code. If you use claude.ai in Chrome, Brave or another Chromium browser, see the [browser extension](browser-extension/): the same limits, alerts with sound, and a pace forecast in your toolbar.
+If you use claude.ai in Chrome, Brave or another Chromium browser, see [Usage Meter for Claude](browser-extension/): the same limits in your toolbar and on the claude.ai page, with alerts and sound, a messages-left estimate and a pace forecast. It can also feed this top bar, so the GNOME extension works without Claude Code.
 
 ## How it works
 

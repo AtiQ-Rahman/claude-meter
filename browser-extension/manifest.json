@@ -1,8 +1,9 @@
 {
   "manifest_version": 3,
-  "name": "Claude Meter",
+  "name": "Usage Meter for Claude",
+  "short_name": "Usage Meter",
   "version": "0.1.0",
-  "description": "Live claude.ai session and weekly usage limits, with sound alerts and a pace forecast. No servers, no tracking.",
+  "description": "Your real claude.ai session and weekly limits, with sound alerts, a pace forecast and messages-left estimate. Unofficial; no servers, no tracking.",
   "homepage_url": "https://github.com/AtiQ-Rahman/claude-meter",
   "icons": {
     "16": "icons/16.png",
@@ -11,7 +12,7 @@
     "128": "icons/128.png"
   },
   "action": {
-    "default_title": "Claude Meter",
+    "default_title": "Usage Meter for Claude",
     "default_popup": "popup/popup.html",
     "default_icon": {
       "16": "icons/16.png",
@@ -23,12 +24,26 @@
     "type": "module"
   },
   "options_page": "options/options.html",
-  "permissions": ["storage", "alarms", "notifications", "offscreen"],
-  "host_permissions": ["https://claude.ai/*"],
+  "permissions": [
+    "storage",
+    "alarms",
+    "notifications",
+    "offscreen"
+  ],
+  "optional_permissions": [
+    "nativeMessaging"
+  ],
+  "host_permissions": [
+    "https://claude.ai/*"
+  ],
   "content_scripts": [
     {
-      "matches": ["https://claude.ai/*"],
-      "js": ["content/content.js"],
+      "matches": [
+        "https://claude.ai/*"
+      ],
+      "js": [
+        "content/content.js"
+      ],
       "run_at": "document_idle"
     }
   ]

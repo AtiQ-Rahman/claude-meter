@@ -20,7 +20,7 @@ function forecastText(f, w, now) {
   return { text: 'Not climbing right now', cls: 'muted' };
 }
 
-function renderWindow(w, forecast, settings, now) {
+function renderWindow(w, forecast, left, settings, now) {
   const lv = level(w.pct, settings);
   const box = el('div', 'window');
 
@@ -37,6 +37,7 @@ function renderWindow(w, forecast, settings, now) {
     box.append(el('div', 'muted small',
       `Resets in ${formatDuration(w.resetsAt - now)} · ${formatClock(w.resetsAt, isWeekly(w.key))}`));
   }
+  if (left != null) box.append(el('div', 'small', `About ${left} messages left at your usual size`));
   const f = forecastText(forecast, w, now);
   box.append(el('div', `forecast small ${f.cls}`, f.text));
   return box;
@@ -50,7 +51,7 @@ async function render() {
   const list = $('windows');
   list.replaceChildren();
   if (usage) {
-    for (const w of usage.windows) list.append(renderWindow(w, usage.forecasts?.[w.key], settings, now));
+    for (const w of usage.windows) list.append(renderWindow(w, usage.forecasts?.[w.key], usage.messagesLeft?.[w.key], settings, now));
     $('org').textContent = usage.org?.name || '';
     $('updated').textContent = `Updated ${formatDuration(now - usage.fetchedAt)} ago`;
   } else {

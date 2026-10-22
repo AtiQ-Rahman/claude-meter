@@ -257,7 +257,7 @@ class Indicator extends PanelMenu.Button {
         this._weekRow.update(w, now, true);
         this._footer.label.text = age == null
             ? 'Waiting for Claude Code to report usage…'
-            : `Updated ${fmtDuration(age)} ago${stale ? ' - open Claude Code to refresh' : ''}`;
+            : `Updated ${fmtDuration(age)} ago${stale ? ' - open Claude Code or claude.ai to refresh' : ''}`;
     }
 
     _checkAlert(key, name, state, now, withDay) {

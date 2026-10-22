@@ -65,6 +65,38 @@ async function renderDiagnostics() {
   document.getElementById('diag-raw').textContent = shown ? JSON.stringify(shown, null, 2) : '';
 }
 
+// ---- GNOME top bar bridge (optional nativeMessaging permission) ----
+
+const gnomeToggle = document.getElementById('gnome-toggle');
+const gnomeStatus = document.getElementById('gnome-status');
+document.getElementById('gnome-cmd').textContent = `./install.sh --browser ${chrome.runtime.id}`;
+
+async function loadGnome() {
+  const granted = await chrome.permissions.contains({ permissions: ['nativeMessaging'] });
+  gnomeToggle.checked = granted && (await getSettings()).gnomeBridge;
+}
+
+gnomeToggle.addEventListener('change', async () => {
+  if (gnomeToggle.checked) {
+    const granted = await chrome.permissions.request({ permissions: ['nativeMessaging'] });
+    if (!granted) {
+      gnomeToggle.checked = false;
+      return;
+    }
+  }
+  await saveSettings({ gnomeBridge: gnomeToggle.checked });
+});
+
+document.getElementById('gnome-test').addEventListener('click', async () => {
+  gnomeStatus.textContent = 'Testing…';
+  const res = await chrome.runtime.sendMessage({ type: 'claude-meter:test-gnome' });
+  gnomeStatus.textContent = res?.ok
+    ? 'Connected. Readings will show in the top bar.'
+    : `Not connected: ${res?.error || 'unknown error'}. Run the command above, then restart the browser.`;
+});
+
+loadGnome();
+
 document.getElementById('diag-refresh').addEventListener('click', async () => {
   await chrome.runtime.sendMessage({ type: 'claude-meter:refresh', force: true });
   renderDiagnostics();
