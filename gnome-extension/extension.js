@@ -33,6 +33,12 @@ function saveConfig(config) {
     }
 }
 
+// Switch items close the menu on click by default; toggle in place instead.
+function keepMenuOpen(item) {
+    item.activate = () => item.toggle();
+    return item;
+}
+
 function level(pct) {
     if (pct >= 85) return 'crit';
     if (pct >= 60) return 'warn';
@@ -127,10 +133,10 @@ class Indicator extends PanelMenu.Button {
 
         const settings = new PopupMenu.PopupSubMenuMenuItem('Settings');
         this.menu.addMenuItem(settings);
-        const sSwitch = new PopupMenu.PopupSwitchMenuItem('Show Session (S)', config.showSession);
+        const sSwitch = keepMenuOpen(new PopupMenu.PopupSwitchMenuItem('Show Session (S)', config.showSession));
         sSwitch.connect('toggled', (_i, on) => this._setOption('showSession', on));
         settings.menu.addMenuItem(sSwitch);
-        const wSwitch = new PopupMenu.PopupSwitchMenuItem('Show Week (W)', config.showWeekly);
+        const wSwitch = keepMenuOpen(new PopupMenu.PopupSwitchMenuItem('Show Week (W)', config.showWeekly));
         wSwitch.connect('toggled', (_i, on) => this._setOption('showWeekly', on));
         settings.menu.addMenuItem(wSwitch);
         settings.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem('Position in top bar'));

@@ -54,6 +54,8 @@ Open the indicator and go to **Settings**:
 - **Show Session (S)** / **Show Week (W)**: show or hide each value in the top bar
 - **Position in top bar**: Left, Center or Right
 
+![Toggling Session and Week on and off from the Settings menu](demo.gif)
+
 Settings are saved in `~/.config/claude-meter/settings.json`.
 
 ## Terminal status line
