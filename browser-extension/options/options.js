@@ -59,7 +59,10 @@ async function renderDiagnostics() {
   if (error) lines.push(`Last error (${error.kind}): ${error.message}, ${formatDuration(Date.now() - error.at)} ago`);
   if (!usage && !error) lines.push('No reading yet.');
   status.textContent = lines.join('\n');
-  document.getElementById('diag-raw').textContent = usage ? JSON.stringify(usage.raw, null, 2) : '';
+  // Show what failed when the error is newer than the last good reading.
+  const failed = error?.details && (!usage || error.at > usage.fetchedAt);
+  const shown = failed ? error.details : usage?.raw;
+  document.getElementById('diag-raw').textContent = shown ? JSON.stringify(shown, null, 2) : '';
 }
 
 document.getElementById('diag-refresh').addEventListener('click', async () => {

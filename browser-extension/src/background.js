@@ -30,7 +30,7 @@ async function doRefresh() {
   try {
     usage = await fetchUsage(settings);
   } catch (e) {
-    const error = { kind: e.kind || 'network', message: e.message, at: now };
+    const error = { kind: e.kind || 'network', message: e.message, at: now, details: e.details || null };
     await chrome.storage.local.set({ error });
     await setBadge('!', BADGE_COLORS.error, error.kind === 'auth'
       ? 'Claude Meter: log in to claude.ai to see your usage'

@@ -64,31 +64,38 @@ async function getJson(path) {
   }
 }
 
-// Prefer the org that carries the Pro/Max subscription.
-export function pickOrg(orgs, preferredId) {
-  if (!Array.isArray(orgs) || orgs.length === 0) return null;
-  const preferred = orgs.find(o => o.uuid === preferredId);
-  if (preferred) return preferred;
+// Orgs to try, best first: the chosen one, then the Pro/Max subscription, then chat orgs.
+export function orderOrgs(orgs, preferredId) {
+  if (!Array.isArray(orgs)) return [];
   const caps = o => o.capabilities || [];
-  return orgs.find(o => caps(o).some(c => /claude_(max|pro)/.test(c)))
-    || orgs.find(o => caps(o).includes('chat'))
-    || orgs[0];
+  const score = o => (o.uuid === preferredId ? 0
+    : caps(o).some(c => /claude_(max|pro)/.test(c)) ? 1
+      : caps(o).includes('chat') ? 2 : 3);
+  return orgs.filter(o => o && o.uuid).sort((a, b) => score(a) - score(b));
 }
 
 function prettify(key) {
   return key.replace(/_/g, ' ').replace(/^\w/, c => c.toUpperCase());
 }
 
+function toNumber(v) {
+  if (typeof v === 'number' && Number.isFinite(v)) return v;
+  if (typeof v === 'string' && v.trim() !== '' && Number.isFinite(Number(v))) return Number(v);
+  return null;
+}
+
 export function parseUsage(json) {
   if (!json || typeof json !== 'object') throw new UsageError('format', 'Empty usage response');
   const windows = [];
   for (const [key, value] of Object.entries(json)) {
-    if (!value || typeof value !== 'object' || typeof value.utilization !== 'number') continue;
+    if (!value || typeof value !== 'object') continue;
+    const pct = toNumber(value.utilization ?? value.used_percentage ?? value.percent_used);
+    if (pct == null) continue;
     const resetsAt = value.resets_at ? Date.parse(value.resets_at) : NaN;
     windows.push({
       key,
       label: LABELS[key] || prettify(key),
-      pct: Math.round(value.utilization),
+      pct: Math.round(pct),
       resetsAt: Number.isNaN(resetsAt) ? null : resetsAt,
     });
   }
@@ -99,14 +106,28 @@ export function parseUsage(json) {
 
 export async function fetchUsage(settings) {
   const orgs = await getJson('/api/organizations');
-  const org = pickOrg(orgs, settings.orgId);
-  if (!org) throw new UsageError('auth', 'No organization found. Are you logged in to claude.ai?');
-  const raw = await getJson(`/api/organizations/${org.uuid}/usage`);
-  return {
-    org: { uuid: org.uuid, name: org.name || '' },
-    orgs: orgs.map(o => ({ uuid: o.uuid, name: o.name || o.uuid })),
-    windows: parseUsage(raw),
-    raw,
-    fetchedAt: Date.now(),
-  };
+  const candidates = orderOrgs(orgs, settings.orgId);
+  if (candidates.length === 0) throw new UsageError('auth', 'No organization found. Are you logged in to claude.ai?');
+
+  // Not every org has usage limits (for example API-only orgs), so try each until one does.
+  const tried = [];
+  let lastError = null;
+  for (const org of candidates) {
+    let raw;
+    try {
+      raw = await getJson(`/api/organizations/${org.uuid}/usage`);
+      return {
+        org: { uuid: org.uuid, name: org.name || '' },
+        orgs: candidates.map(o => ({ uuid: o.uuid, name: o.name || o.uuid })),
+        windows: parseUsage(raw),
+        raw,
+        fetchedAt: Date.now(),
+      };
+    } catch (e) {
+      tried.push({ org: org.name || org.uuid, capabilities: org.capabilities || [], error: e.message, response: raw ?? null });
+      lastError = e;
+    }
+  }
+  lastError.details = tried;
+  throw lastError;
 }
