@@ -178,6 +178,10 @@ Remove the browser extension from `chrome://extensions`.
 
 `browser-extension/package.sh` builds two zips in `dist/`: `usage-meter-for-claude-<version>.zip` for GitHub releases (unzips to one folder for Load unpacked) and `usage-meter-for-claude-<version>-webstore.zip` for the Chrome Web Store. The privacy policy for the listing is [PRIVACY.md](browser-extension/PRIVACY.md).
 
+## Contributing
+
+Anyone is welcome to modify, fork or improve this project. Issues and pull requests are welcome.
+
 ## License
 
 [MIT](LICENSE)
