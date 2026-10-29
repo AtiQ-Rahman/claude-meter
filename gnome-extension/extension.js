@@ -1,5 +1,6 @@
 /* Claude Meter - top-bar vitals for Claude session (5h) and weekly limits.
- * Reads ~/.cache/claude-meter/usage.json, written by the Claude Code status line script. */
+ * Reads ~/.cache/claude-meter/usage.json, written by the Claude Code status line script.
+ * Snap browsers can't write there, so their native host's cache is read too and the newest wins. */
 
 const { GObject, St, GLib, Clutter } = imports.gi;
 const Main = imports.ui.main;
@@ -9,6 +10,8 @@ const MessageTray = imports.ui.messageTray;
 const ByteArray = imports.byteArray;
 
 const CACHE_FILE = GLib.build_filenamev([GLib.get_user_cache_dir(), 'claude-meter', 'usage.json']);
+const CACHE_FILES = [CACHE_FILE, ...['brave', 'chromium'].map(snap =>
+    GLib.build_filenamev([GLib.get_home_dir(), 'snap', snap, 'common', '.cache', 'claude-meter', 'usage.json']))];
 const CONFIG_DIR = GLib.build_filenamev([GLib.get_user_config_dir(), 'claude-meter']);
 const CONFIG_FILE = GLib.build_filenamev([CONFIG_DIR, 'settings.json']);
 const ALERTS_FILE = GLib.build_filenamev([GLib.get_user_cache_dir(), 'claude-meter', 'alerts.json']);
@@ -220,12 +223,15 @@ class Indicator extends PanelMenu.Button {
     }
 
     _read() {
-        try {
-            const [ok, bytes] = GLib.file_get_contents(CACHE_FILE);
-            return ok ? JSON.parse(ByteArray.toString(bytes)) : null;
-        } catch (e) {
-            return null;
+        let newest = null;
+        for (const file of CACHE_FILES) {
+            try {
+                const [ok, bytes] = GLib.file_get_contents(file);
+                const data = ok ? JSON.parse(ByteArray.toString(bytes)) : null;
+                if (data && (!newest || (data.updated_at || 0) > (newest.updated_at || 0))) newest = data;
+            } catch (e) {}
         }
+        return newest;
     }
 
     _setPanel(label, state, stale) {

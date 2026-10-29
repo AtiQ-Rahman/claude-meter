@@ -21,6 +21,9 @@ HOST_DIRS=(
   "$HOME/.config/BraveSoftware/Brave-Browser/NativeMessagingHosts"
   "$HOME/.config/chromium/NativeMessagingHosts"
   "$HOME/.config/microsoft-edge/NativeMessagingHosts"
+  # Snap browsers keep their profile inside the snap's home
+  "$HOME/snap/brave/current/.config/BraveSoftware/Brave-Browser/NativeMessagingHosts"
+  "$HOME/snap/chromium/current/.config/chromium/NativeMessagingHosts"
 )
 
 if [ "${1:-}" = "--browser" ]; then
