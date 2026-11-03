@@ -1,8 +1,10 @@
 {
-  "uuid": "claude-meter@atiq-rahman.github.io",
+  "uuid": "claudemeter@rng70.github.com",
   "name": "Claude Meter",
   "description": "Live Claude session (5h) and weekly usage in the top bar. Data comes from the Claude Code status line cache.",
-  "shell-version": ["42"],
+  "shell-version": ["45", "46", "47", "48", "49", "50", "51"],
   "url": "https://github.com/AtiQ-Rahman/claude-meter",
+  "settings-schema": "org.gnome.shell.extensions.claude-meter",
+  "version-name": "1.0.0",
   "version": 1
 }
