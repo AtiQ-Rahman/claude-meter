@@ -2,6 +2,7 @@
 
 import { getSettings } from './settings.js';
 import { fetchUsage } from './usage.js';
+import { gnomeMessage } from './gnome.js';
 import { recordSample, forecast } from './forecast.js';
 import { decideAlerts } from './alerts.js';
 import { updateCosts, messagesLeft } from './estimate.js';
@@ -113,15 +114,8 @@ function scheduleResetChecks(windows, now) {
 // Optional: hand the reading to the GNOME extension through a small native host.
 function sendToGnome(usage) {
   if (!chrome.runtime.sendNativeMessage) return; // optional permission not granted
-  const pick = key => {
-    const w = usage.windows.find(x => x.key === key);
-    return w ? { used_percentage: w.pct, resets_at: w.resetsAt ? Math.floor(w.resetsAt / 1000) : null } : null;
-  };
-  chrome.runtime.sendNativeMessage(NATIVE_HOST, {
-    five_hour: pick('five_hour'),
-    seven_day: pick('seven_day'),
-    model: 'claude.ai',
-  }).catch(e => console.warn(`${NAME}: GNOME bridge not reachable`, e.message));
+  chrome.runtime.sendNativeMessage(NATIVE_HOST, gnomeMessage(usage))
+    .catch(e => console.warn(`${NAME}: GNOME bridge not reachable`, e.message));
 }
 
 function resetLine(w, now) {
