@@ -76,12 +76,36 @@ const PROPERTY_NOTIFICATIONS = SHELL_MAJOR >= 46;
 // GNOME 48 replaced St.BoxLayout's `vertical` with `orientation`.
 const VERTICAL = SHELL_MAJOR >= 48 ? { orientation: Clutter.Orientation.VERTICAL } : { vertical: true };
 
-function readJson(file) {
-    try {
-        const [ok, bytes] = GLib.file_get_contents(file);
-        if (ok) return JSON.parse(decoder.decode(bytes));
-    } catch (e) {}
-    return null;
+// Runs one of Gio's asynchronous calls and resolves with what its finish call returns.
+// All file access goes through here, so the shell never waits on the disk.
+function gio(object, asyncCall, finishCall, ...args) {
+    return new Promise((resolve, reject) => {
+        object[asyncCall](...args, (source, result) => {
+            try {
+                resolve(source[finishCall](result));
+            } catch (e) {
+                reject(e);
+            }
+        });
+    });
+}
+
+// The parsed JSON in a file, or null when it's missing or invalid.
+function readJson(path, cancellable = null) {
+    return gio(Gio.File.new_for_path(path), 'load_contents_async', 'load_contents_finish', cancellable)
+        .then(([, bytes]) => JSON.parse(decoder.decode(bytes)))
+        .catch(() => null);
+}
+
+// Creates a directory and its missing parents.
+function makeDirs(path) {
+    const dir = Gio.File.new_for_path(path);
+    return gio(dir, 'make_directory_async', 'make_directory_finish', GLib.PRIORITY_DEFAULT, null).catch(e => {
+        if (e.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.EXISTS)) return null;
+        const parent = dir.get_parent();
+        if (!parent || !e.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.NOT_FOUND)) throw e;
+        return makeDirs(parent.get_path()).then(() => makeDirs(path));
+    });
 }
 
 // The newest of several readings, by updated_at. The first wins a tie.
@@ -93,8 +117,8 @@ function newest(readings) {
     return found;
 }
 
-function readNewest(files) {
-    return newest(files.map(readJson));
+function readNewest(files, cancellable) {
+    return Promise.all(files.map(file => readJson(file, cancellable))).then(newest);
 }
 
 function newestWith(readings, key) {
@@ -109,32 +133,57 @@ function retryAfter(value, now) {
     return Number.isNaN(date) ? null : Math.floor(date / 1000) - now;
 }
 
+// Saves to one file go one after another, so an older save never lands last.
+const saving = new Map();
+
 // what: for the error message, e.g. "alert state".
-function writeJson(file, data, what) {
+function writeJson(path, data, what) {
+    const bytes = new GLib.Bytes(encoder.encode(JSON.stringify(data)));
+    const saved = (saving.get(path) || Promise.resolve())
+        .then(() => makeDirs(GLib.path_get_dirname(path)))
+        .then(() => gio(Gio.File.new_for_path(path), 'replace_contents_bytes_async', 'replace_contents_finish',
+            bytes, null, false, Gio.FileCreateFlags.NONE, null))
+        .catch(e => logError(e, `claude-meter: could not save ${what}`));
+    saving.set(path, saved);
+    return saved;
+}
+
+let logging = Promise.resolve();
+
+// Adds a line to the log that View logs opens. Resolves once it is written.
+function logLine(text) {
+    const line = `${GLib.DateTime.new_now_local().format('%F %T')} ${text}\n`;
+    logging = logging.then(() => appendLog(line)).catch(() => {});
+    return logging;
+}
+
+async function appendLog(line) {
+    await makeDirs(GLib.path_get_dirname(LOG_FILE));
+    const file = Gio.File.new_for_path(LOG_FILE);
+    const info = await gio(file, 'query_info_async', 'query_info_finish',
+        'standard::size', Gio.FileQueryInfoFlags.NONE, GLib.PRIORITY_DEFAULT, null).catch(() => null);
+    if (info && info.get_size() > LOG_MAX_BYTES) {
+        const old = Gio.File.new_for_path(`${LOG_FILE}.old`);
+        await gio(old, 'delete_async', 'delete_finish', GLib.PRIORITY_DEFAULT, null).catch(() => null);
+        await gio(file, 'set_display_name_async', 'set_display_name_finish', old.get_basename(), GLib.PRIORITY_DEFAULT, null);
+    }
+    const stream = await gio(file, 'append_to_async', 'append_to_finish', Gio.FileCreateFlags.NONE, GLib.PRIORITY_DEFAULT, null);
     try {
-        GLib.mkdir_with_parents(GLib.path_get_dirname(file), 0o755);
-        GLib.file_set_contents(file, JSON.stringify(data));
-    } catch (e) {
-        logError(e, `claude-meter: could not save ${what}`);
+        let bytes = encoder.encode(line);
+        while (bytes.length > 0) {
+            const written = await gio(stream, 'write_bytes_async', 'write_bytes_finish',
+                new GLib.Bytes(bytes), GLib.PRIORITY_DEFAULT, null);
+            if (written <= 0) throw new Error('nothing written');
+            bytes = bytes.subarray(written);
+        }
+    } finally {
+        await gio(stream, 'close_async', 'close_finish', GLib.PRIORITY_DEFAULT, null);
     }
 }
 
-function logLine(text) {
-    try {
-        GLib.mkdir_with_parents(GLib.path_get_dirname(LOG_FILE), 0o755);
-        const file = Gio.File.new_for_path(LOG_FILE);
-        if (file.query_exists(null) &&
-            file.query_info('standard::size', Gio.FileQueryInfoFlags.NONE, null).get_size() > LOG_MAX_BYTES)
-            file.move(Gio.File.new_for_path(`${LOG_FILE}.old`), Gio.FileCopyFlags.OVERWRITE, null, null);
-        const stream = file.append_to(Gio.FileCreateFlags.NONE, null);
-        stream.write_all(encoder.encode(`${GLib.DateTime.new_now_local().format('%F %T')} ${text}\n`), null);
-        stream.close(null);
-    } catch (e) {}
-}
-
 // Settings used to be kept in a JSON file. Moves them into GSettings and removes it.
-function migrateSettings(settings) {
-    const old = readJson(OLD_CONFIG_FILE);
+async function migrateSettings(settings) {
+    const old = await readJson(OLD_CONFIG_FILE);
     if (!old || typeof old !== 'object') return;
     for (const [from, to] of [['showSession', 'show-session'], ['showWeekly', 'show-weekly'],
         ['alerts', 'usage-alerts'], ['account', 'plan-and-model-limits']]) {
@@ -142,7 +191,7 @@ function migrateSettings(settings) {
     }
     if (['left', 'center', 'right'].includes(old.position)) settings.set_string('position', old.position);
     try {
-        Gio.File.new_for_path(OLD_CONFIG_FILE).delete(null);
+        await gio(Gio.File.new_for_path(OLD_CONFIG_FILE), 'delete_async', 'delete_finish', GLib.PRIORITY_DEFAULT, null);
         logLine(`Moved the settings in ${OLD_CONFIG_FILE} to GSettings`);
     } catch (e) {
         logError(e, 'claude-meter: could not remove the old settings file');
@@ -314,9 +363,18 @@ class Indicator extends PanelMenu.Button {
         super._init(0.0, 'Claude Meter');
         this._settings = settings;
         this._actions = actions;
-        this._alerts = readJson(ALERTS_FILE) || {};
+        this._cancellable = new Gio.Cancellable();
+        this._destroyed = false;
+        this._refreshes = 0;
+        this._alerts = {};
         this._notes = {};
-        this._smart = Object.assign({ started_at: 0, tried_at: 0 }, readJson(SMART_FILE));
+        this._smart = { started_at: 0, tried_at: 0 };
+        // Refreshes wait for this, so an alert that already fired doesn't fire again.
+        this._ready = Promise.all([readJson(ALERTS_FILE, this._cancellable), readJson(SMART_FILE, this._cancellable)])
+            .then(([alerts, smart]) => {
+                if (alerts && typeof alerts === 'object') this._alerts = alerts;
+                if (smart && typeof smart === 'object') Object.assign(this._smart, smart);
+            });
 
         const box = this._box = new St.BoxLayout({ style_class: 'claude-meter-panel', y_align: Clutter.ActorAlign.CENTER });
         box.add_child(new St.Label({ text: '✳', style_class: 'claude-meter-icon', y_align: Clutter.ActorAlign.CENTER }));
@@ -395,7 +453,7 @@ class Indicator extends PanelMenu.Button {
         ];
         this._applyVisibility();
 
-        this.menu.connect('open-state-changed', (_m, open) => {
+        this._menuOpenId = this.menu.connect('open-state-changed', (_m, open) => {
             if (!open) return;
             this._fetchAccount(OPEN_FETCH_SECONDS);
             this._refresh();
@@ -432,15 +490,16 @@ class Indicator extends PanelMenu.Button {
             return Clutter.EVENT_STOP;
         };
         if (Clutter.KeyController) {
-            const keys = new Clutter.KeyController();
-            keys.connect('key-press', () => {
+            const keys = this._keys = new Clutter.KeyController();
+            this._keysId = keys.connect('key-press', () => {
                 const [, symbol] = keys.get_key();
                 const [, pressed, latched, locked] = keys.get_state();
                 return onKey(symbol, pressed | latched | locked);
             });
             this.menu.actor.add_action(keys);
         } else {
-            this.menu.actor.connect('key-press-event', (_a, event) => onKey(event.get_key_symbol(), event.get_state()));
+            this._keyPressId = this.menu.actor.connect('key-press-event',
+                (_a, event) => onKey(event.get_key_symbol(), event.get_state()));
         }
     }
 
@@ -453,48 +512,62 @@ class Indicator extends PanelMenu.Button {
 
     _viewLogs() {
         // Also creates the file, should nothing have been logged yet.
-        logLine('View logs');
-        try {
-            Gio.AppInfo.launch_default_for_uri(GLib.filename_to_uri(LOG_FILE, null),
-                global.create_app_launch_context(0, -1));
-        } catch (e) {
-            Main.notifyError('Claude Meter could not open its log', `${LOG_FILE}: ${e.message}`);
-        }
+        logLine('View logs').then(() => {
+            try {
+                Gio.AppInfo.launch_default_for_uri(GLib.filename_to_uri(LOG_FILE, null),
+                    global.create_app_launch_context(0, -1));
+            } catch (e) {
+                Main.notifyError('Claude Meter could not open its log', `${LOG_FILE}: ${e.message}`);
+            }
+        });
     }
 
     // Asks the usage API for the plan and limits when the newest saved copy is older
-    // than maxAge seconds, trying at most once per maxAge.
+    // than maxAge seconds, trying at most once per maxAge. Resolves once done.
     _fetchAccount(maxAge) {
         const now = Math.floor(Date.now() / 1000);
-        if (!this._settings.get_boolean('plan-and-model-limits') || this._fetching || now - this._lastFetch < maxAge) return;
-        const saved = readNewest(ACCOUNT_FILES);
-        if (saved && now - saved.updated_at < maxAge) return;
-        const oauth = (readJson(CREDENTIALS_FILE) || {}).claudeAiOauth;
-        // Without Claude Code, the browser extension can still supply them.
-        if (!oauth || !oauth.accessToken) {
-            this._setLoginState('missing');
-            return;
-        }
-        // Only Claude Code renews its login: renewing it here would sign Claude Code out.
-        if (oauth.expiresAt < Date.now()) {
-            this._setLoginState('expired');
-            return;
-        }
-        if (now < this._retryAt) return;
-        this._lastFetch = now;
+        if (!this._settings.get_boolean('plan-and-model-limits') || this._fetching || now - this._lastFetch < maxAge)
+            return Promise.resolve();
         this._fetching = true;
+        return Promise.all([readNewest(ACCOUNT_FILES, this._cancellable), readJson(CREDENTIALS_FILE, this._cancellable)])
+            .then(([saved, credentials]) => {
+                if (this._destroyed || (saved && now - saved.updated_at < maxAge)) return null;
+                const oauth = (credentials || {}).claudeAiOauth;
+                // Without Claude Code, the browser extension can still supply them.
+                if (!oauth || !oauth.accessToken) {
+                    this._setLoginState('missing');
+                    return null;
+                }
+                // Only Claude Code renews its login: renewing it here would sign Claude Code out.
+                if (oauth.expiresAt < Date.now()) {
+                    this._setLoginState('expired');
+                    return null;
+                }
+                if (now < this._retryAt) return null;
+                this._lastFetch = now;
+                return this._request(oauth);
+            })
+            .catch(e => logError(e, 'claude-meter: could not fetch account usage'))
+            .finally(() => {
+                this._fetching = false;
+            });
+    }
+
+    _request(oauth) {
         if (!this._http) this._http = new Soup.Session({ timeout: 20, user_agent: 'claude-meter' });
-        httpGet(this._http, USAGE_API, {
+        return new Promise(resolve => httpGet(this._http, USAGE_API, {
             'Authorization': `Bearer ${oauth.accessToken}`,
             'anthropic-beta': 'oauth-2025-04-20',
             'Accept': 'application/json',
         }, (status, body, headers) => {
-            this._fetching = false;
-            if (!this._http) return; // destroyed
+            if (this._destroyed) {
+                resolve();
+                return;
+            }
             const time = Math.floor(Date.now() / 1000);
             if (status === 401) {
                 this._setLoginState('expired');
-                this._refresh();
+                resolve(this._refresh());
                 return;
             }
             if (status === 429) {
@@ -502,6 +575,7 @@ class Indicator extends PanelMenu.Button {
                 const wait = retryAfter(headers && headers.get_one('Retry-After'), time);
                 this._retryAt = time + Math.min(Math.max(wait == null ? 2 * FETCH_SECONDS : wait, 0), MAX_BACKOFF_SECONDS);
                 this._logFetchError('HTTP 429', `asking again in ${fmtDuration(this._retryAt - time)}`);
+                resolve();
                 return;
             }
             let json = null;
@@ -510,19 +584,21 @@ class Indicator extends PanelMenu.Button {
             } catch (e) {}
             if (status !== 200 || !json || typeof json !== 'object') {
                 this._logFetchError(status ? `HTTP ${status}` : 'no response');
+                resolve();
                 return;
             }
             this._setLoginState('ok');
             const account = parseAccount(json, oauth, time);
             if (!account) {
                 this._logFetchError('no usage limits in the response');
+                resolve();
                 return;
             }
             this._fetchError = null;
             logLine('Usage API: updated the plan and model limits');
-            writeJson(ACCOUNT_FILE, account, 'account usage');
-            this._refresh();
-        });
+            // Shown once saved, as the menu reads it back from the file.
+            resolve(writeJson(ACCOUNT_FILE, account, 'account usage').then(() => this._refresh()));
+        }));
     }
 
     // Logs each new kind of failure to the system log once instead of every few minutes,
@@ -551,15 +627,27 @@ class Indicator extends PanelMenu.Button {
         label.style_class = stale ? 'claude-meter-stale' : `claude-meter-${level(state.pct)}`;
     }
 
+    // Reads the usage files, then updates the top bar and the menu. When refreshes
+    // overlap, only the last one shows. Resolves once shown.
     _refresh() {
+        const refresh = ++this._refreshes;
+        const files = CACHE_FILES.concat(this._settings.get_boolean('plan-and-model-limits') ? ACCOUNT_FILES : []);
+        return this._ready
+            .then(() => Promise.all(files.map(file => readJson(file, this._cancellable))))
+            .then(results => {
+                if (this._destroyed || refresh !== this._refreshes) return;
+                this._show(results.slice(0, CACHE_FILES.length),
+                    results.slice(CACHE_FILES.length).filter(a => a && typeof a.updated_at === 'number'));
+            })
+            .catch(e => logError(e, 'claude-meter: could not refresh'));
+    }
+
+    _show(caches, accounts) {
         const now = Math.floor(Date.now() / 1000);
-        const accounts = this._settings.get_boolean('plan-and-model-limits')
-            ? ACCOUNT_FILES.map(readJson).filter(a => a && typeof a.updated_at === 'number')
-            : [];
         const account = newest(accounts);
         // All of them report session and week. Each shows the newest reading that has it, so
         // a reading without them, such as a usage API response in a new shape, hides nothing.
-        const readings = CACHE_FILES.map(readJson).concat(accounts);
+        const readings = caches.concat(accounts);
         const sData = newestWith(readings, 'five_hour');
         const wData = newestWith(readings, 'seven_day');
         const s = windowState(sData && sData.five_hour, now);
@@ -611,7 +699,7 @@ class Indicator extends PanelMenu.Button {
     }
 
     _checkSmartRefresh(sData, now) {
-        if (!this._settings.get_boolean('smart-quota-refresh') || this._smartProc) return;
+        if (!this._settings.get_boolean('smart-quota-refresh') || this._smartProc || this._smartStarting) return;
         if (smartRefreshDue(sData && sData.five_hour, sData && sData.updated_at, this._smart, now)) this._startWindow(now);
     }
 
@@ -627,19 +715,28 @@ class Indicator extends PanelMenu.Button {
             return;
         }
         logLine('Smart quota refresh: the session window has ended, starting a new one');
+        // Away from any project, so no project settings or CLAUDE.md apply.
+        const dir = GLib.path_get_dirname(SMART_FILE);
+        this._smartStarting = true;
+        makeDirs(dir).catch(() => null).then(() => {
+            this._smartStarting = false;
+            if (!this._destroyed) this._runClaude(claude, dir);
+        });
+    }
+
+    _runClaude(claude, dir) {
         let proc;
         try {
             const launcher = new Gio.SubprocessLauncher({
                 flags: Gio.SubprocessFlags.STDOUT_SILENCE | Gio.SubprocessFlags.STDERR_PIPE,
             });
-            // Away from any project, so no project settings or CLAUDE.md apply.
-            GLib.mkdir_with_parents(GLib.path_get_dirname(SMART_FILE), 0o755);
-            launcher.set_cwd(GLib.path_get_dirname(SMART_FILE));
+            launcher.set_cwd(dir);
             launcher.set_stdin_file_path('/dev/null');
             proc = launcher.spawnv([claude, ...SMART_ARGS]);
         } catch (e) {
             this._smartError = 'Could not start a window - see View logs';
             logLine(`Smart quota refresh: could not run ${claude}: ${e.message}`);
+            this._refresh();
             return;
         }
         this._smartProc = proc;
@@ -680,7 +777,7 @@ class Indicator extends PanelMenu.Button {
     // The line under the smart quota refresh switch.
     _smartStatus(now) {
         if (!this._settings.get_boolean('smart-quota-refresh')) return SMART_HINT;
-        if (this._smartProc) return 'Starting a new window…';
+        if (this._smartProc || this._smartStarting) return 'Starting a new window…';
         if (this._smartError) return this._smartError;
         if (this._smart.started_at && now < this._smart.started_at + SESSION_SECONDS)
             return `Started a new window at ${fmtClock(this._smart.started_at, false)}`;
@@ -749,14 +846,14 @@ class Indicator extends PanelMenu.Button {
             this._source = PROPERTY_NOTIFICATIONS
                 ? new MessageTray.Source({ title: 'Claude Meter', iconName: 'dialog-warning-symbolic' })
                 : new MessageTray.Source('Claude Meter', 'dialog-warning-symbolic');
-            this._source.connect('destroy', () => {
+            this._sourceDestroyId = this._source.connect('destroy', () => {
                 this._source = null;
                 this._notes = {};
             });
             Main.messageTray.add(this._source);
         }
         const urgency = critical ? MessageTray.Urgency.CRITICAL : MessageTray.Urgency.HIGH;
-        let note = this._notes[key];
+        let note = this._notes[key] && this._notes[key].note;
         if (note) {
             if (PROPERTY_NOTIFICATIONS) note.set({ title, body });
             else note.update(title, body);
@@ -764,10 +861,10 @@ class Indicator extends PanelMenu.Button {
             note = PROPERTY_NOTIFICATIONS
                 ? new MessageTray.Notification({ source: this._source, title, body })
                 : new MessageTray.Notification(this._source, title, body);
-            note.connect('destroy', () => {
-                if (this._notes[key] === note) delete this._notes[key];
+            const destroyId = note.connect('destroy', () => {
+                if (this._notes[key] && this._notes[key].note === note) delete this._notes[key];
             });
-            this._notes[key] = note;
+            this._notes[key] = { note, destroyId };
         }
         if (PROPERTY_NOTIFICATIONS) {
             note.urgency = urgency;
@@ -781,7 +878,12 @@ class Indicator extends PanelMenu.Button {
     }
 
     destroy() {
+        this._destroyed = true;
+        this._cancellable.cancel();
         this._settingsIds.forEach(id => this._settings.disconnect(id));
+        this.menu.disconnect(this._menuOpenId);
+        if (this._keysId) this._keys.disconnect(this._keysId);
+        if (this._keyPressId) this.menu.actor.disconnect(this._keyPressId);
         if (this._smartProc) {
             this._smartCancel.cancel();
             this._smartProc.force_exit();
@@ -791,7 +893,12 @@ class Indicator extends PanelMenu.Button {
             GLib.source_remove(this._smartTimeout);
             this._smartTimeout = 0;
         }
-        if (this._source) this._source.destroy();
+        if (this._source) {
+            for (const { note, destroyId } of Object.values(this._notes)) note.disconnect(destroyId);
+            this._source.disconnect(this._sourceDestroyId);
+            this._source.destroy();
+            this._source = null;
+        }
         if (this._http) {
             this._http.abort();
             this._http = null;
