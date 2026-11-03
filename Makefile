@@ -23,7 +23,7 @@ S ?= 38
 W ?= 35
 M ?= 12
 
-.PHONY: help schemas install uninstall link unlink enable disable prefs nested fake reset-alerts legacy unit test test-all logs pack clean
+.PHONY: help schemas install uninstall link unlink enable disable prefs nested fake reset-alerts legacy unit test test-all lint logs pack release clean
 
 help: ## Show this help
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-13s %s\n", $$1, $$2}'
@@ -99,6 +99,9 @@ test: unit $(if $(OLD_SHELL),legacy) ## Unit tests, then a headless smoke test o
 test-all: ## Smoke test on GNOME 42-51 in throwaway Docker containers (downloads ~1 GB per version); V="42 45" picks versions
 	$(CURDIR)/dev/test-all.sh $(V)
 
+lint: pack ## Check the zips with shexli, as extensions.gnome.org's review guidelines recommend
+	$(CURDIR)/dev/lint.sh $(CURDIR)/dist/$(UUID).shell-extension.zip $(CURDIR)/dist/$(UUID).legacy.shell-extension.zip
+
 logs: ## Follow GNOME Shell logs of your real session
 	journalctl --user -f -o cat /usr/bin/gnome-shell
 
@@ -110,6 +113,9 @@ pack: legacy ## Build installable zips in dist/ for GNOME 45-51 and 42-44 (.lega
 	@# GNOME 42 and 43 don't compile the schema when they install an extension.
 	cd $(LEGACY) && zip -q $(CURDIR)/build/$(UUID).shell-extension.zip schemas/gschemas.compiled
 	mv $(CURDIR)/build/$(UUID).shell-extension.zip $(CURDIR)/dist/$(UUID).legacy.shell-extension.zip
+
+release: ## Build the release files in dist/release, as the Release workflow does
+	$(CURDIR)/dev/package-release.sh
 
 clean: ## Remove .dev/, build/, dist/ and the compiled schema
 	rm -rf $(CURDIR)/.dev $(CURDIR)/build $(CURDIR)/dist $(SRC)/schemas/gschemas.compiled

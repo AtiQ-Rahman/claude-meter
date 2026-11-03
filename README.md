@@ -245,10 +245,29 @@ To also forget the settings: `dconf reset -f /org/gnome/shell/extensions/claude-
 - `make test`: `make unit`, then a headless smoke test on your GNOME Shell with a fake login, usage API, browser reading and Claude Code, which also opens the settings window and uses the menu's shortcuts
 - `make test-all`: the same test on GNOME 42 to 51, each in a throwaway Docker container (downloads about 1 GB per version, keeps nothing but the Alpine base images)
 - `make pack`: build the extension zips for GNOME 45-51 and 42-44 (needs `zip`)
+- `make lint`: build the zips and check them with [shexli](https://pypi.org/project/shexli/), the analyzer extensions.gnome.org's review guidelines recommend. It installs shexli into `.dev/shexli` with tree-sitter 0.25, because tree-sitter 0.26 makes shexli crash with a segmentation fault. Run shexli on the zip you upload, not on the repository: on a folder over 50 MB it stops with "Package exceeds total file size limit". shexli 0.2.1 calls GNOME 51 an "implausible future release", as it predates it; `make lint` lets that one finding pass.
 
-## Publishing the browser extension
+## Releasing
 
-`browser-extension/package.sh` builds two zips in `dist/`: `usage-meter-for-claude-<version>.zip` for GitHub releases (unzips to one folder for Load unpacked) and `usage-meter-for-claude-<version>-webstore.zip` for the Chrome Web Store. The privacy policy for the listing is [PRIVACY.md](browser-extension/PRIVACY.md).
+Push a tag that matches `version-name` in `gnome-extension/metadata.json`, for example:
+
+```bash
+git tag v1.0.0 && git push origin v1.0.0
+```
+
+The [Release workflow](.github/workflows/release.yml) then runs the unit tests, the smoke test on GNOME 42 to 51 and `make lint`, and publishes a GitHub release with:
+
+| File | For |
+| --- | --- |
+| `claude-meter-gnome-<version>.shell-extension.zip` | GNOME 45-51: `gnome-extensions install`, or upload to extensions.gnome.org |
+| `claude-meter-gnome-<version>-gnome42-44.shell-extension.zip` | GNOME 42-44 |
+| `usage-meter-for-claude-<version>.zip` | the browser extension: unzips to one folder for Load unpacked |
+| `usage-meter-for-claude-<version>-webstore.zip` | the Chrome Web Store |
+| `SHA256SUMS` | checksums of the four |
+
+A tag with a hyphen, such as `v1.1.0-beta.1`, makes a prerelease. To build and test without releasing, run the workflow from the Actions tab; the files are kept as its `release-files` artifact. `make release` builds the same files locally in `dist/release`.
+
+The browser extension's version is the one in `browser-extension/manifest.json`; `browser-extension/package.sh` builds just its two zips. The privacy policy for the Chrome Web Store listing is [PRIVACY.md](browser-extension/PRIVACY.md).
 
 ## Contributing
 

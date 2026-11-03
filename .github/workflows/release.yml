@@ -1,0 +1,103 @@
+# Publishes a GitHub release for a pushed tag such as v1.0.0, which must match version-name
+# in gnome-extension/metadata.json. The release gets the GNOME extension zips (45-51 and
+# 42-44), the browser extension zips (Load unpacked and Chrome Web Store) and SHA256SUMS,
+# once the unit tests, the GNOME 42-51 smoke tests and the shexli check pass.
+# Run it by hand (Actions > Release > Run workflow) to build and test without releasing;
+# the files are then kept as the workflow's release-files artifact.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install gjs
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends gjs
+      - name: Run the unit tests
+        run: make unit
+
+  smoke:
+    name: Smoke test on GNOME ${{ matrix.gnome }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        gnome: [42, 43, 44, 45, 46, 47, 48, 49, 50, 51]
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install the schema compiler
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libglib2.0-bin
+      - name: Run GNOME Shell ${{ matrix.gnome }} headless in a container
+        run: dev/test-all.sh ${{ matrix.gnome }}
+      - name: Show the end of the test log
+        if: failure()
+        run: tail -n 60 ".dev/matrix/${{ matrix.gnome }}/test.log"
+      - name: Keep the logs and screenshots
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: smoke-gnome-${{ matrix.gnome }}
+          path: .dev/matrix/${{ matrix.gnome }}
+
+  build:
+    name: Build and check the release files
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install the packaging tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gnome-shell libglib2.0-bin jq python3-venv zip
+      - name: Check the tag against the version
+        if: github.ref_type == 'tag'
+        run: |
+          version=$(jq -r '."version-name"' gnome-extension/metadata.json)
+          if [ "$GITHUB_REF_NAME" != "v$version" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME doesn't match version-name $version in gnome-extension/metadata.json"
+            exit 1
+          fi
+      - name: Build the zips, checking the GNOME ones with shexli
+        run: dev/package-release.sh
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-files
+          path: |
+            dist/release/
+            dist/release-notes.md
+          if-no-files-found: error
+
+  release:
+    name: Publish the release
+    if: github.ref_type == 'tag'
+    needs: [unit, smoke, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: release-files
+          path: files
+      - name: Create the release, or update its files
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          tag="$GITHUB_REF_NAME"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" files/release/* --clobber
+          else
+            prerelease=()
+            case "$tag" in *-*) prerelease=(--prerelease) ;; esac
+            gh release create "$tag" files/release/* --verify-tag --title "Claude Meter $tag" \
+              --notes-file files/release-notes.md --generate-notes "${prerelease[@]}"
+          fi
