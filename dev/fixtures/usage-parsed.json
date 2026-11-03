@@ -1,0 +1,7 @@
+{
+  "five_hour": {"used_percentage": 2, "resets_at": 1793301600},
+  "seven_day": {"used_percentage": 17, "resets_at": 1793804400},
+  "plan": "Max (5x)",
+  "limits": [{"title": "Week · Fable", "used_percentage": 0, "resets_at": 1793804400}],
+  "extra_usage": {"enabled": false, "used_percentage": 0, "used": "$0.00", "limit": null, "reason": "out_of_credits"}
+}
