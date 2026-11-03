@@ -6,14 +6,30 @@
 set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")" && pwd)"
-UUID="claude-meter@atiq-rahman.github.io"
-EXT_DIR="$HOME/.local/share/gnome-shell/extensions/$UUID"
 SETTINGS="$HOME/.claude/settings.json"
 STATUSLINE="$REPO/statusline.sh"
 
 command -v jq >/dev/null || { echo "jq is required (sudo apt install jq)"; exit 1; }
+UUID=$(jq -r .uuid "$REPO/gnome-extension/metadata.json")
+EXT_DIR="$HOME/.local/share/gnome-shell/extensions/$UUID"
+# The ID of versions before 1.0.0: installing or uninstalling removes its link and setting.
+OLD_UUID="claude-meter@atiq-rahman.github.io"
+OLD_DIR="$HOME/.local/share/gnome-shell/extensions/$OLD_UUID"
 
-enabled_list() { gsettings get org.gnome.shell enabled-extensions; }
+# The system gsettings: other copies on PATH, such as Homebrew's, can keep settings
+# where GNOME never reads them.
+GSETTINGS=gsettings
+if [ -x /usr/bin/gsettings ]; then GSETTINGS=/usr/bin/gsettings; fi
+COMPILE=glib-compile-schemas
+if [ -x /usr/bin/glib-compile-schemas ]; then COMPILE=/usr/bin/glib-compile-schemas; fi
+enabled_list() { "$GSETTINGS" get org.gnome.shell enabled-extensions; }
+disable_uuid() {
+  "$GSETTINGS" set org.gnome.shell enabled-extensions "$(enabled_list | sed "s/, '$1'//; s/'$1', //; s/'$1'//")"
+}
+# Removes the old ID's link, when it points into this folder.
+remove_old_link() {
+  case "$(readlink "$OLD_DIR" 2>/dev/null)" in "$REPO"/*) rm -f "$OLD_DIR" ;; esac
+}
 
 HOST_NAME="io.github.atiq_rahman.claude_meter"
 HOST_DIRS=(
@@ -48,8 +64,9 @@ fi
 if [ "${1:-}" = "--uninstall" ]; then
   for dir in "${HOST_DIRS[@]}"; do rm -f "$dir/$HOST_NAME.json"; done
   rm -f "$EXT_DIR"
-  gsettings set org.gnome.shell enabled-extensions \
-    "$(enabled_list | sed "s/, '$UUID'//; s/'$UUID', //; s/'$UUID'//")"
+  remove_old_link
+  disable_uuid "$UUID"
+  disable_uuid "$OLD_UUID"
   if [ -f "$SETTINGS" ] && [ "$(jq -r '.statusLine.command // ""' "$SETTINGS")" = "$STATUSLINE" ]; then
     jq 'del(.statusLine)' "$SETTINGS" > "$SETTINGS.tmp" && mv "$SETTINGS.tmp" "$SETTINGS"
     echo "Removed statusLine from $SETTINGS"
@@ -72,9 +89,25 @@ jq --arg cmd "$STATUSLINE" \
   "$SETTINGS.bak" > "$SETTINGS"
 echo "Configured status line in $SETTINGS (backup: $SETTINGS.bak)"
 
-# 2. GNOME Shell extension
+# 2. GNOME Shell extension (GNOME 42-44 get a copy converted from the GNOME 45+ source)
+ext_src="$REPO/gnome-extension"
+# One sed, not grep | head: grep can die of SIGPIPE when head exits, which pipefail turns into an error.
+shell_major=$(gnome-shell --version 2>/dev/null | sed -nE 's/^GNOME Shell ([0-9]+).*/\1/p' || true)
+command -v "$COMPILE" >/dev/null || { echo "glib-compile-schemas is required (sudo apt install libglib2.0-bin)"; exit 1; }
+if [ -n "$shell_major" ] && [ "$shell_major" -lt 45 ]; then
+  ext_src="$REPO/build/legacy"
+  "$REPO/dev/build-legacy.sh" "$ext_src"
+else
+  # The settings schema, compiled where the extension looks for it.
+  "$COMPILE" --strict "$ext_src/schemas"
+fi
 mkdir -p "$(dirname "$EXT_DIR")"
-ln -sfn "$REPO/gnome-extension" "$EXT_DIR"
+if [ -L "$OLD_DIR" ] || grep -q "'$OLD_UUID'" <<<"$(enabled_list)"; then
+  remove_old_link
+  disable_uuid "$OLD_UUID"
+  echo "Removed the old extension ID $OLD_UUID"
+fi
+ln -sfn "$ext_src" "$EXT_DIR"
 list=$(enabled_list)
 if ! grep -q "$UUID" <<<"$list"; then
   if [ "$list" = "@as []" ] || [ "$list" = "[]" ]; then
@@ -82,7 +115,7 @@ if ! grep -q "$UUID" <<<"$list"; then
   else
     new="${list%]}, '$UUID']"
   fi
-  gsettings set org.gnome.shell enabled-extensions "$new"
+  "$GSETTINGS" set org.gnome.shell enabled-extensions "$new"
 fi
 echo "Linked extension to $EXT_DIR and enabled it"
 

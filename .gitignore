@@ -1,4 +1,7 @@
 .last-input.json
 *.tmp
 dist/
+build/
 __pycache__/
+.dev/
+gnome-extension/schemas/gschemas.compiled

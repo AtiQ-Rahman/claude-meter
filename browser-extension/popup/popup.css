@@ -70,6 +70,7 @@ button.spinning { animation: spin 0.8s linear infinite; }
 .pct.ok { color: var(--ok); }
 .pct.warn { color: var(--warn); }
 .pct.crit { color: var(--crit); }
+.pct.off { color: var(--muted); }
 
 .track { height: 8px; margin: 6px 0; border-radius: 4px; background: var(--track); overflow: hidden; }
 .fill { height: 100%; border-radius: 4px; }

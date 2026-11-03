@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <enum id="org.gnome.shell.extensions.claude-meter.position">
+    <value nick="left" value="0"/>
+    <value nick="center" value="1"/>
+    <value nick="right" value="2"/>
+  </enum>
+
+  <schema id="org.gnome.shell.extensions.claude-meter" path="/org/gnome/shell/extensions/claude-meter/">
+    <key name="show-session" type="b">
+      <default>true</default>
+      <summary>Show session usage (S) in the top bar</summary>
+    </key>
+    <key name="show-weekly" type="b">
+      <default>true</default>
+      <summary>Show weekly usage (W) in the top bar</summary>
+    </key>
+    <key name="position" enum="org.gnome.shell.extensions.claude-meter.position">
+      <default>'right'</default>
+      <summary>Part of the top bar to show the meter in</summary>
+    </key>
+    <key name="usage-alerts" type="b">
+      <default>true</default>
+      <summary>Play a sound and show a notification as usage nears a limit</summary>
+    </key>
+    <key name="plan-and-model-limits" type="b">
+      <default>false</default>
+      <summary>Show the plan, per-model weekly limits and extra usage</summary>
+      <description>Reads Claude Code's login to ask Anthropic's usage API, the same request Claude Code's /usage makes.</description>
+    </key>
+    <key name="smart-quota-refresh" type="b">
+      <default>false</default>
+      <summary>Start a new session window as soon as the last one ends</summary>
+      <description>Sends Claude one tiny message through Claude Code, so that the next session limit resets sooner.</description>
+    </key>
+  </schema>
+</schemalist>

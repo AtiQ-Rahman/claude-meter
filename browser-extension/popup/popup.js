@@ -1,5 +1,6 @@
 import { getSettings } from '../src/settings.js';
 import { formatDuration, formatClock, isWeekly, level } from '../src/format.js';
+import { prettify } from '../src/usage.js';
 
 const $ = id => document.getElementById(id);
 
@@ -20,7 +21,22 @@ function forecastText(f, w, now) {
   return { text: 'Not climbing right now', cls: 'muted' };
 }
 
-function renderWindow(w, forecast, left, settings, now) {
+// "$12.50 of $50.00 used" for extra usage.
+function spentText(extra) {
+  if (!extra?.used) return null;
+  return extra.limit ? `${extra.used} of ${extra.limit} used` : `${extra.used} used`;
+}
+
+// Extra usage that is turned off: no bar, just why.
+function renderExtraOff(extra) {
+  const box = el('div', 'window');
+  const head = el('div', 'row');
+  head.append(el('span', 'label', 'Extra usage'), el('span', 'pct off', 'Off'));
+  box.append(head, el('div', 'muted small', extra.reason ? prettify(extra.reason) : 'Turned off'));
+  return box;
+}
+
+function renderWindow(w, forecast, left, settings, now, extra) {
   const lv = level(w.pct, settings);
   const box = el('div', 'window');
 
@@ -37,6 +53,8 @@ function renderWindow(w, forecast, left, settings, now) {
     box.append(el('div', 'muted small',
       `Resets in ${formatDuration(w.resetsAt - now)} · ${formatClock(w.resetsAt, isWeekly(w.key))}`));
   }
+  const spent = w.key === 'extra_usage' ? spentText(extra) : null;
+  if (spent) box.append(el('div', 'muted small', spent));
   if (left != null) box.append(el('div', 'small', `About ${left} messages left at your usual size`));
   const f = forecastText(forecast, w, now);
   box.append(el('div', `forecast small ${f.cls}`, f.text));
@@ -51,8 +69,11 @@ async function render() {
   const list = $('windows');
   list.replaceChildren();
   if (usage) {
-    for (const w of usage.windows) list.append(renderWindow(w, usage.forecasts?.[w.key], usage.messagesLeft?.[w.key], settings, now));
-    $('org').textContent = usage.org?.name || '';
+    for (const w of usage.windows) {
+      list.append(renderWindow(w, usage.forecasts?.[w.key], usage.messagesLeft?.[w.key], settings, now, usage.extra));
+    }
+    if (usage.extra && !usage.extra.enabled) list.append(renderExtraOff(usage.extra));
+    $('org').textContent = [usage.org?.name, usage.plan].filter(Boolean).join(' · ');
     $('updated').textContent = `Updated ${formatDuration(now - usage.fetchedAt)} ago`;
   } else {
     $('updated').textContent = error ? '' : 'Loading…';

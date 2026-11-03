@@ -14,5 +14,8 @@
 .claude-meter-fill-ok { background-color: #8fd18f; }
 .claude-meter-fill-warn { background-color: #f0c05a; }
 .claude-meter-fill-crit { background-color: #ff6b6b; }
+.claude-meter-fill-stale { background-color: rgba(255, 255, 255, 0.35); }
 .claude-meter-footer { color: rgba(255, 255, 255, 0.5); font-size: 0.85em; }
 .claude-meter-panel-crit { background-color: rgba(255, 70, 70, 0.3); border-radius: 10px; padding: 0 8px; }
+.claude-meter-shortcut { color: rgba(255, 255, 255, 0.5); }
+.claude-meter-hint { padding-left: 12px; }
