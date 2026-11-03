@@ -292,11 +292,10 @@ shell_eval() {
 
 # The indicator, in JavaScript run in the shell.
 IND='Main.panel.statusArea["claude-meter"]'
-# Refreshes the indicator, opens its menu and lists the text it shows, each with its
-# style class in brackets, then the top bar's style.
+# Opens the indicator's menu and lists the text it shows, each with its style class in
+# brackets, then the top bar's style.
 MENU_DUMP='
 const i = Main.panel.statusArea["claude-meter"];
-i._refresh();
 i.menu.open(false);
 const out = [];
 const walk = a => {
@@ -309,15 +308,25 @@ const walk = a => {
 };
 walk(i.menu.box);
 out.join(" | ") + " || panel[" + i._box.style_class + "]";'
-# Lets the indicator try the usage API again first.
-REFETCH='
-const j = Main.panel.statusArea["claude-meter"];
-j._lastFetch = 0;
-j._fetchAccount(300);'
+# Lets the indicator try the usage API again, as a promise for menu_dump.
+REFETCH='(j => {
+    j._lastFetch = 0;
+    return j._fetchAccount(300);
+})(Main.panel.statusArea["claude-meter"])'
 # Asks the indicator to fetch now, however recent its last fetch.
 FETCH_NOW='Main.panel.statusArea["claude-meter"]._fetchAccount(0);'
 # Seconds until the indicator may ask the usage API again.
 RETRY_IN='Main.panel.statusArea["claude-meter"]._retryAt - Math.floor(Date.now() / 1000);'
+
+# Waits for the promise of JavaScript $1, if given, then for a refresh of the indicator,
+# which reads its files without blocking, and prints MENU_DUMP's list.
+menu_dump() {
+  shell_eval "global._smokeDone = false;
+    Promise.resolve(${1:-null}).then(() => $IND._refresh()).finally(() => { global._smokeDone = true; });
+    true" >/dev/null || return 1
+  wait_js 10 'global._smokeDone === true' || { echo "the refresh did not finish"; return 1; }
+  shell_eval "$MENU_DUMP"
+}
 
 # Runs inside the private D-Bus session: starts the shell and checks the extension.
 checks() {
@@ -338,7 +347,7 @@ checks() {
   sleep 1
   screenshot "$DEV/screenshot.png" >/dev/null && echo "ok   screenshot: $DEV/screenshot.png"
 
-  menu=$(shell_eval "$MENU_DUMP") || fail "could not open the menu: $menu"
+  menu=$(menu_dump) || fail "could not open the menu: $menu"
   expect "$menu" "Week · Fable[claude-meter-row-title] | 92%[claude-meter-crit]" \
     "Extra usage[claude-meter-row-title] | 25%[claude-meter-ok]" "\$12.50 of \$50.00 used" "Max (5x) · updated"
   echo "ok   menu shows the plan, the Fable weekly limit and extra usage"
@@ -346,7 +355,7 @@ checks() {
   screenshot "$DEV/menu.png" >/dev/null && echo "ok   screenshot: $DEV/menu.png"
 
   fake 20 40
-  menu=$(shell_eval "$MENU_DUMP") || fail "menu: $menu"
+  menu=$(menu_dump) || fail "menu: $menu"
   expect "$menu" "Session (5 hours)[claude-meter-row-title] | 20%[claude-meter-ok]" \
     "panel[claude-meter-panel claude-meter-panel-crit]"
   echo "ok   top bar turns red for the Fable limit alone"
@@ -355,13 +364,13 @@ checks() {
   # and week stays below its first one, so no alert fires.
   local colors
   fake 89 74
-  menu=$(shell_eval "$MENU_DUMP") || fail "menu: $menu"
+  menu=$(menu_dump) || fail "menu: $menu"
   expect "$menu" "Session (5 hours)[claude-meter-row-title] | 89%[claude-meter-warn]" \
     "Week (7 days)[claude-meter-row-title] | 74%[claude-meter-ok]"
   colors=$(shell_eval "$IND._sLabel.style_class + ' ' + $IND._wLabel.style_class")
   [ "$colors" = '"claude-meter-warn claude-meter-ok"' ] || fail "top bar at 89% and 74%: $colors"
   fake 90 75
-  menu=$(shell_eval "$MENU_DUMP") || fail "menu: $menu"
+  menu=$(menu_dump) || fail "menu: $menu"
   expect "$menu" "Session (5 hours)[claude-meter-row-title] | 90%[claude-meter-crit]" \
     "Week (7 days)[claude-meter-row-title] | 75%[claude-meter-warn]"
   colors=$(shell_eval "$IND._sLabel.style_class + ' ' + $IND._wLabel.style_class")
@@ -375,7 +384,7 @@ checks() {
     \"limits\": [{\"title\": \"Week · Fable\", \"used_percentage\": 50, \"resets_at\": $((now + 259200))}],
     \"extra_usage\": {\"enabled\": false, \"used_percentage\": 0, \"used\": \"\$0.00\", \"limit\": null, \"reason\": \"out_of_credits\"}}"
   [ -f "$SNAP_CACHE/claude-meter/account.json" ] || fail "the native host wrote no account.json"
-  menu=$(shell_eval "$MENU_DUMP") || fail "menu: $menu"
+  menu=$(menu_dump) || fail "menu: $menu"
   expect "$menu" "Week · Fable[claude-meter-row-title] | 50%[claude-meter-ok]" "Off[claude-meter-stale]" \
     "Out of credits[claude-meter-row-sub]" "Pro · updated" "panel[claude-meter-panel]"
   echo "ok   a reading from the browser extension's native host shows in the menu"
@@ -383,7 +392,7 @@ checks() {
   login -60
   age "$CACHE/account.json" 1300
   age "$SNAP_CACHE/claude-meter/account.json" 1200
-  menu=$(shell_eval "$REFETCH$MENU_DUMP") || fail "menu: $menu"
+  menu=$(menu_dump "$REFETCH") || fail "menu: $menu"
   expect "$menu" "Week · Fable[claude-meter-row-title] | 50%[claude-meter-stale]" \
     "Claude Code login expired - open Claude Code[claude-meter-footer]" "panel[claude-meter-panel]"
   [[ "$menu" != *"Session (5 hours)[claude-meter-row-title] | 20%[claude-meter-stale]"* ]] || fail "fresh session row went grey"
@@ -399,7 +408,7 @@ checks() {
   shell_eval "$FETCH_NOW" >/dev/null || fail "could not ask for a fetch"
   wait_for 20 '.five_hour == null and .seven_day == null and .limits[0].used_percentage == 30' "$CACHE/account.json" \
     || fail "the reading without session and week was not saved: $(cat "$CACHE/account.json")"
-  menu=$(shell_eval "$MENU_DUMP") || fail "menu: $menu"
+  menu=$(menu_dump) || fail "menu: $menu"
   expect "$menu" "Session (5 hours)[claude-meter-row-title] | 33%[claude-meter-ok]" \
     "Week (7 days)[claude-meter-row-title] | 44%[claude-meter-ok]" "Week · Fable[claude-meter-row-title] | 30%[claude-meter-ok]"
   echo "ok   an API reading without session and week keeps the status line's"
@@ -414,7 +423,7 @@ checks() {
   done
   [ "$wait" -ge 590 ] && [ "$wait" -le 600 ] || fail "expected to wait the 600 seconds Retry-After asks, not $wait"
   shell_eval "$FETCH_NOW" >/dev/null || fail "could not ask for a fetch"
-  shell_eval "$MENU_DUMP" >/dev/null || fail "could not open the menu"
+  menu_dump >/dev/null || fail "could not open the menu"
   sleep 1
   [ "$(wc -l < "$DEV/api.log")" -eq $((requests + 1)) ] || fail "asked the rate-limited API again: $(tail -3 "$DEV/api.log")"
   echo "ok   a rate-limited API is asked again only after its Retry-After"
@@ -425,7 +434,7 @@ checks() {
     || fail "plan and model limits did not move from the old settings file to GSettings"
   echo "ok   the old settings file moved to GSettings"
 
-  menu=$(shell_eval "$MENU_DUMP") || fail "menu: $menu"
+  menu=$(menu_dump) || fail "menu: $menu"
   expect "$menu" "Refresh now | Ctrl+R[claude-meter-shortcut]" "Smart quota refresh" \
     "Starts a new window when one ends[claude-meter-footer claude-meter-hint]" "Settings… | Ctrl+,[claude-meter-shortcut]" \
     "View logs" "Version 1.0.0[claude-meter-footer]" "Quit Claude Meter | Ctrl+Q[claude-meter-shortcut]"
@@ -446,6 +455,16 @@ checks() {
     || fail "View logs did not open $CACHE/claude-meter.log: $(cat "$DEV/opened" 2>/dev/null)"
   echo "ok   View logs opens the log in the default text editor"
 
+  # Past 256 KB the log starts over, keeping the previous one as claude-meter.log.old.
+  echo "old log" > "$CACHE/claude-meter.log.old"
+  head -c 300000 /dev/zero | tr '\0' 'x' >> "$CACHE/claude-meter.log"
+  shell_eval "$IND._refreshNow(); true" >/dev/null || fail "could not refresh"
+  for ((i = 0; i < 20; i++)); do [ "$(stat -c %s "$CACHE/claude-meter.log" 2>/dev/null || echo 0)" -lt 1000 ] && break; sleep 0.5; done
+  [ "$(stat -c %s "$CACHE/claude-meter.log")" -lt 1000 ] && grep -q "Refresh now" "$CACHE/claude-meter.log" \
+    || fail "the log did not start over: $(stat -c %s "$CACHE/claude-meter.log") bytes"
+  [ "$(stat -c %s "$CACHE/claude-meter.log.old")" -gt 300000 ] || fail "the full log was not kept as claude-meter.log.old"
+  echo "ok   a log past 256 KB starts over, keeping the previous one"
+
   # Smart quota refresh starts a new window through Claude Code once the last one ended.
   ended
   shell_eval "$IND._smartSwitch.toggle()" >/dev/null || fail "could not turn on smart quota refresh"
@@ -458,7 +477,7 @@ checks() {
   wait_for 10 '.started_at > 0 and .started_at >= .tried_at' "$CACHE/smart-refresh.json" \
     || fail "no new window noted: $(cat "$CACHE/smart-refresh.json")"
   wait_log 10 "Smart quota refresh: started a new session window" || fail "the new window is not in the log"
-  menu=$(shell_eval "$MENU_DUMP") || fail "menu: $menu"
+  menu=$(menu_dump) || fail "menu: $menu"
   expect "$menu" "Started a new window at"
   shell_eval "$IND._refresh(); $IND._refresh(); true" >/dev/null
   sleep 1
@@ -469,7 +488,7 @@ checks() {
   shell_eval "$IND._smart = {started_at: 0, tried_at: 0}; $IND._refresh(); true" >/dev/null
   wait_claude 20 2 || fail "smart quota refresh did not try again"
   wait_log 10 "failed: not logged in" || fail "the failure is not in the log: $(tail -3 "$CACHE/claude-meter.log")"
-  menu=$(shell_eval "$MENU_DUMP") || fail "menu: $menu"
+  menu=$(menu_dump) || fail "menu: $menu"
   expect "$menu" "Could not start a window - see View logs[claude-meter-footer claude-meter-hint]"
   shell_eval "$IND._refresh(); true" >/dev/null
   sleep 1
@@ -541,7 +560,7 @@ export HOME="$DEV/home" XDG_CACHE_HOME="$DEV/cache" XDG_CONFIG_HOME="$DEV/config
   XDG_RUNTIME_DIR="$DEV/runtime" GSETTINGS_BACKEND=keyfile GVFS_DISABLE_FUSE=1 PATH="$DEV/bin:$PATH" \
   CLAUDE_CONFIG_DIR="$DEV/claude" CLAUDE_METER_USAGE_API="http://127.0.0.1:$(cat "$DEV/api.port")/api/oauth/usage"
 export -f fail expect fake ended login age send_host wait_for wait_step wait_log wait_js wait_claude ctrl_key \
-  screenshot shell_eval checks
+  screenshot shell_eval menu_dump checks
 export REPO DEV UUID CACHE SNAP_CACHE IND MENU_DUMP REFETCH FETCH_NOW RETRY_IN
 
 # Containers have no system bus, and the shell won't start without one.
