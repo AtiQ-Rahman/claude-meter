@@ -23,7 +23,7 @@ S ?= 38
 W ?= 35
 M ?= 12
 
-.PHONY: help schemas install uninstall link unlink enable disable prefs nested fake reset-alerts legacy unit test test-all lint logs pack clean
+.PHONY: help schemas install uninstall link unlink enable disable prefs nested fake reset-alerts legacy unit test test-all lint logs pack release clean
 
 help: ## Show this help
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-13s %s\n", $$1, $$2}'
@@ -113,6 +113,9 @@ pack: legacy ## Build installable zips in dist/ for GNOME 45-51 and 42-44 (.lega
 	@# GNOME 42 and 43 don't compile the schema when they install an extension.
 	cd $(LEGACY) && zip -q $(CURDIR)/build/$(UUID).shell-extension.zip schemas/gschemas.compiled
 	mv $(CURDIR)/build/$(UUID).shell-extension.zip $(CURDIR)/dist/$(UUID).legacy.shell-extension.zip
+
+release: ## Build the release files in dist/release, as the Release workflow does
+	$(CURDIR)/dev/package-release.sh
 
 clean: ## Remove .dev/, build/, dist/ and the compiled schema
 	rm -rf $(CURDIR)/.dev $(CURDIR)/build $(CURDIR)/dist $(SRC)/schemas/gschemas.compiled
