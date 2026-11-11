@@ -11,6 +11,10 @@ Use the browser extension if you mostly chat on claude.ai, and the GNOME extensi
 
 > Unofficial community project. Not affiliated with or endorsed by Anthropic.
 
+![A short tour of Usage Meter for Claude: the live usage ring, the popup, sound alerts, history, settings and the GNOME top bar](video/usage-meter-for-claude.gif)
+
+Watch the [full video with sound](video/usage-meter-for-claude.mp4).
+
 ---
 
 ## Usage Meter for Claude (browser extension)
