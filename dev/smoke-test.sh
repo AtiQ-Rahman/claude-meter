@@ -437,7 +437,7 @@ checks() {
   menu=$(menu_dump) || fail "menu: $menu"
   expect "$menu" "Refresh now | Ctrl+R[claude-meter-shortcut]" "Smart quota refresh" \
     "Starts a new window when one ends[claude-meter-footer claude-meter-hint]" "Settings… | Ctrl+,[claude-meter-shortcut]" \
-    "View logs" "Version 1.0.0[claude-meter-footer]" "Quit Claude Meter | Ctrl+Q[claude-meter-shortcut]"
+    "View logs" "Version 1.0.1[claude-meter-footer]" "Quit Claude Meter | Ctrl+Q[claude-meter-shortcut]"
   [[ "$menu" != *"Show Session (S)"* ]] || fail "the old Settings submenu is still there"
   echo "ok   the menu has Refresh now, Smart quota refresh, Settings…, View logs, the version and Quit"
   sleep 1

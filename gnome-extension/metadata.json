@@ -5,6 +5,6 @@
   "shell-version": ["45", "46", "47", "48", "49", "50", "51"],
   "url": "https://github.com/AtiQ-Rahman/claude-meter",
   "settings-schema": "org.gnome.shell.extensions.claude-meter",
-  "version-name": "1.0.0",
+  "version-name": "1.0.1",
   "version": 1
 }
