@@ -24,7 +24,7 @@ import * as MessageTray from 'resource:///org/gnome/shell/ui/messageTray.js';
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
-import {parseAccount, prettify} from './account.js';
+import {parseAccount} from './account.js';
 import {SESSION_SECONDS, smartRefreshDue} from './quota.js';
 
 const CACHE_FILE = GLib.build_filenamev([GLib.get_user_cache_dir(), 'claude-meter', 'usage.json']);
@@ -47,7 +47,6 @@ const SMART_FILE = GLib.build_filenamev([GLib.get_user_cache_dir(), 'claude-mete
 const SMART_ARGS = ['-p', 'Reply with OK.', '--model', 'haiku', '--tools', '', '--no-session-persistence',
     '--strict-mcp-config', '--disable-slash-commands', '--settings', '{"disableAllHooks": true}'];
 const SMART_TIMEOUT_SECONDS = 2 * 60;
-const SMART_HINT = 'Starts a new window when one ends';
 const CREDENTIALS_FILE = GLib.build_filenamev([
     GLib.getenv('CLAUDE_CONFIG_DIR') || GLib.build_filenamev([GLib.get_home_dir(), '.claude']), '.credentials.json']);
 // The undocumented endpoint behind Claude Code's /usage. The smoke test points it at a local server.
@@ -236,21 +235,14 @@ function playSound(name) {
     }
 }
 
-// Switch items close the menu on click by default; toggle in place instead.
-function keepMenuOpen(item) {
-    item.activate = () => item.toggle();
-    return item;
-}
-
-function menuItem(text, shortcut = null) {
-    const item = new PopupMenu.PopupMenuItem(text);
-    if (shortcut) {
-        item.add_child(new St.Label({
-            text: shortcut, style_class: 'claude-meter-shortcut', x_expand: true,
-            x_align: Clutter.ActorAlign.END, y_align: Clutter.ActorAlign.CENTER,
-        }));
-    }
-    return item;
+// A round icon button for the menu's bottom row. name: what it does, for screen readers.
+function iconButton(icon, name, onClick) {
+    const button = new St.Button({
+        style_class: 'claude-meter-action', can_focus: true, track_hover: true, accessible_name: name,
+        child: new St.Icon({ icon_name: icon, icon_size: 16 }),
+    });
+    button.connect('clicked', onClick);
+    return button;
 }
 
 function noteItem(text = '') {
@@ -359,7 +351,7 @@ class UsageRow extends PopupMenu.PopupBaseMenuItem {
 const Indicator = GObject.registerClass(
 class Indicator extends PanelMenu.Button {
     // actions: openPreferences() and quit(), which the extension carries out.
-    _init(settings, version, actions) {
+    _init(settings, actions) {
         super._init(0.0, 'Claude Meter');
         this._settings = settings;
         this._actions = actions;
@@ -397,38 +389,32 @@ class Indicator extends PanelMenu.Button {
         // No fetch before this time, after the usage API said it got too many requests.
         this._retryAt = 0;
         this.menu.addMenuItem(this._accountSection);
-        this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
-        this._footer = noteItem();
-        this.menu.addMenuItem(this._footer);
         // Why the plan and model limits are missing or old, when they are.
         this._note = noteItem();
         this._note.visible = false;
         this.menu.addMenuItem(this._note);
-        this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
-
-        const refresh = menuItem('Refresh now', 'Ctrl+R');
-        // In place, so the menu stays open to show what it found.
-        refresh.activate = () => this._refreshNow();
-        this.menu.addMenuItem(refresh);
+        // Says what smart quota refresh last did, while there is something to say.
         this._smartOn = settings.get_boolean('smart-quota-refresh');
-        this._smartSwitch = keepMenuOpen(new PopupMenu.PopupSwitchMenuItem('Smart quota refresh', this._smartOn));
-        this._smartSwitch.connect('toggled', (_i, on) => settings.set_boolean('smart-quota-refresh', on));
-        this.menu.addMenuItem(this._smartSwitch);
-        this._smartNote = noteItem(SMART_HINT);
-        this._smartNote.label.add_style_class_name('claude-meter-hint');
+        this._smartNote = noteItem();
+        this._smartNote.visible = false;
         this.menu.addMenuItem(this._smartNote);
         this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
-        const prefs = menuItem('Settings…', 'Ctrl+,');
-        prefs.connect('activate', () => actions.openPreferences());
-        this.menu.addMenuItem(prefs);
-        const logs = menuItem('View logs');
-        logs.connect('activate', () => this._viewLogs());
-        this.menu.addMenuItem(logs);
-        this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
-        this.menu.addMenuItem(noteItem(`Version ${version}`));
-        const quit = menuItem('Quit Claude Meter', 'Ctrl+Q');
-        quit.connect('activate', () => actions.quit());
-        this.menu.addMenuItem(quit);
+
+        // Bottom row: when the shown reading is from, then Refresh, Settings and Quit.
+        const bottom = new PopupMenu.PopupBaseMenuItem({ reactive: false, can_focus: false });
+        this._footer = new St.Label({ style_class: 'claude-meter-footer', x_expand: true, y_align: Clutter.ActorAlign.CENTER });
+        this._footer.clutter_text.line_wrap = true;
+        bottom.add_child(this._footer);
+        const buttons = new St.BoxLayout({ style_class: 'claude-meter-actions', y_align: Clutter.ActorAlign.CENTER });
+        // Refresh in place, so the menu stays open to show what it found.
+        buttons.add_child(iconButton('view-refresh-symbolic', 'Refresh now (Ctrl+R)', () => this._refreshNow()));
+        buttons.add_child(iconButton('emblem-system-symbolic', 'Settings (Ctrl+,)', () => {
+            this.menu.close();
+            actions.openPreferences();
+        }));
+        buttons.add_child(iconButton('system-shutdown-symbolic', 'Quit Claude Meter (Ctrl+Q)', () => actions.quit()));
+        bottom.add_child(buttons);
+        this.menu.addMenuItem(bottom);
         this._watchKeys();
 
         this._settingsIds = [
@@ -445,7 +431,6 @@ class Indicator extends PanelMenu.Button {
                 const on = settings.get_boolean('smart-quota-refresh');
                 if (on === this._smartOn) return;
                 this._smartOn = on;
-                this._smartSwitch.setToggleState(on);
                 this._smartError = null;
                 logLine(`Smart quota refresh turned ${on ? 'on' : 'off'}`);
                 this._refresh();
@@ -508,18 +493,6 @@ class Indicator extends PanelMenu.Button {
         logLine('Refresh now');
         this._fetchAccount(0);
         this._refresh();
-    }
-
-    _viewLogs() {
-        // Also creates the file, should nothing have been logged yet.
-        logLine('View logs').then(() => {
-            try {
-                Gio.AppInfo.launch_default_for_uri(GLib.filename_to_uri(LOG_FILE, null),
-                    global.create_app_launch_context(0, -1));
-            } catch (e) {
-                Main.notifyError('Claude Meter could not open its log', `${LOG_FILE}: ${e.message}`);
-            }
-        });
     }
 
     // Asks the usage API for the plan and limits when the newest saved copy is older
@@ -688,14 +661,16 @@ class Indicator extends PanelMenu.Button {
         this._weekRow.update(w, now, { withDay: true, stale: wStale });
         this._updateAccountRows(limits, extra, accountStale, now);
         const plan = account && typeof account.plan === 'string' ? account.plan : null;
-        this._footer.label.text = age == null
+        this._footer.text = age == null
             ? 'Waiting for Claude Code to report usage…'
             : `${plan ? `${plan} · updated` : 'Updated'} ${fmtDuration(age)} ago${stale ? ' - open Claude Code or claude.ai to refresh' : ''}`;
         const note = this._accountNote(account, now);
         this._note.label.text = note;
         this._note.visible = note !== '';
         this._checkSmartRefresh(sData, now);
-        this._smartNote.label.text = this._smartStatus(now);
+        const smart = this._smartStatus(now);
+        this._smartNote.label.text = smart;
+        this._smartNote.visible = smart !== '';
     }
 
     _checkSmartRefresh(sData, now) {
@@ -734,7 +709,7 @@ class Indicator extends PanelMenu.Button {
             launcher.set_stdin_file_path('/dev/null');
             proc = launcher.spawnv([claude, ...SMART_ARGS]);
         } catch (e) {
-            this._smartError = 'Could not start a window - see View logs';
+            this._smartError = 'Could not start a window - see the log in Settings';
             logLine(`Smart quota refresh: could not run ${claude}: ${e.message}`);
             this._refresh();
             return;
@@ -766,7 +741,7 @@ class Indicator extends PanelMenu.Button {
                 logLine('Smart quota refresh: started a new session window');
                 this._fetchAccount(0);
             } else {
-                this._smartError = 'Could not start a window - see View logs';
+                this._smartError = 'Could not start a window - see the log in Settings';
                 const why = (stderr || '').trim().slice(0, 500) || 'no error message';
                 logLine(`Smart quota refresh: ${claude} failed: ${why}`);
             }
@@ -774,19 +749,20 @@ class Indicator extends PanelMenu.Button {
         });
     }
 
-    // The line under the smart quota refresh switch.
+    // The line under the smart quota refresh switch, or '' for none.
     _smartStatus(now) {
-        if (!this._settings.get_boolean('smart-quota-refresh')) return SMART_HINT;
+        if (!this._settings.get_boolean('smart-quota-refresh')) return '';
         if (this._smartProc || this._smartStarting) return 'Starting a new window…';
         if (this._smartError) return this._smartError;
         if (this._smart.started_at && now < this._smart.started_at + SESSION_SECONDS)
             return `Started a new window at ${fmtClock(this._smart.started_at, false)}`;
-        return SMART_HINT;
+        return '';
     }
 
-    // A row per limit beyond session and week, then extra usage. The rows are only
-    // rebuilt when the set of limits changes.
+    // A row per limit beyond session and week, then extra usage while it's turned on.
+    // The rows are only rebuilt when the set of limits changes.
     _updateAccountRows(limits, extra, stale, now) {
+        if (extra && !extra.enabled) extra = null;
         const titles = limits.map(l => l.title).concat(extra ? ['Extra usage'] : []);
         if (titles.join('\n') !== this._accountTitles) {
             this._accountTitles = titles.join('\n');
@@ -803,10 +779,6 @@ class Indicator extends PanelMenu.Button {
         });
         if (!extra) return;
         const row = this._accountRows[limits.length];
-        if (!extra.enabled) {
-            row.setOff('Off', typeof extra.reason === 'string' && extra.reason ? prettify(extra.reason) : 'Turned off');
-            return;
-        }
         const spent = extra.used && extra.limit ? `${extra.used} of ${extra.limit} used`
             : extra.used ? `${extra.used} used` : 'Turned on';
         row.update({ pct: Math.round(extra.used_percentage || 0), reset: null }, now, { note: spent, stale });
@@ -942,7 +914,7 @@ export default class ClaudeMeterExtension extends Extension {
 
     _addIndicator() {
         const position = this._settings.get_string('position');
-        this._indicator = new Indicator(this._settings, versionName(this.metadata), {
+        this._indicator = new Indicator(this._settings, {
             openPreferences: () => this.openPreferences(),
             quit: () => this._quit(),
         });

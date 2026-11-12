@@ -146,23 +146,6 @@ echo OK
 EOF
 chmod +x "$DEV/bin/claude"
 
-# Stand-in for the default text editor, which View logs opens: notes the file it got.
-printf '#!/bin/sh\necho "$1" >> "%s/opened"\n' "$DEV" > "$DEV/bin/fake-editor"
-chmod +x "$DEV/bin/fake-editor"
-cat > "$DEV/data/applications/fake-editor.desktop" <<EOF
-[Desktop Entry]
-Type=Application
-Name=Fake editor
-Exec=$DEV/bin/fake-editor %f
-MimeType=text/plain;text/x-log;application/octet-stream;
-EOF
-cat > "$DEV/config/mimeapps.list" <<EOF
-[Default Applications]
-text/plain=fake-editor.desktop
-text/x-log=fake-editor.desktop
-application/octet-stream=fake-editor.desktop
-EOF
-
 fail() {
   echo "FAIL: $*"
   exit 1
@@ -385,9 +368,9 @@ checks() {
     \"extra_usage\": {\"enabled\": false, \"used_percentage\": 0, \"used\": \"\$0.00\", \"limit\": null, \"reason\": \"out_of_credits\"}}"
   [ -f "$SNAP_CACHE/claude-meter/account.json" ] || fail "the native host wrote no account.json"
   menu=$(menu_dump) || fail "menu: $menu"
-  expect "$menu" "Week · Fable[claude-meter-row-title] | 50%[claude-meter-ok]" "Off[claude-meter-stale]" \
-    "Out of credits[claude-meter-row-sub]" "Pro · updated" "panel[claude-meter-panel]"
-  echo "ok   a reading from the browser extension's native host shows in the menu"
+  expect "$menu" "Week · Fable[claude-meter-row-title] | 50%[claude-meter-ok]" "Pro · updated" "panel[claude-meter-panel]"
+  [[ "$menu" != *"Extra usage"* ]] || fail "extra usage that is turned off still has a row"
+  echo "ok   a reading from the browser extension's native host shows in the menu, without extra usage while it's off"
 
   login -60
   age "$CACHE/account.json" 1300
@@ -435,11 +418,12 @@ checks() {
   echo "ok   the old settings file moved to GSettings"
 
   menu=$(menu_dump) || fail "menu: $menu"
-  expect "$menu" "Refresh now | Ctrl+R[claude-meter-shortcut]" "Smart quota refresh" \
-    "Starts a new window when one ends[claude-meter-footer claude-meter-hint]" "Settings… | Ctrl+,[claude-meter-shortcut]" \
-    "View logs" "Version 1.0.1[claude-meter-footer]" "Quit Claude Meter | Ctrl+Q[claude-meter-shortcut]"
-  [[ "$menu" != *"Show Session (S)"* ]] || fail "the old Settings submenu is still there"
-  echo "ok   the menu has Refresh now, Smart quota refresh, Settings…, View logs, the version and Quit"
+  [[ "$menu" != *"Show Session (S)"* && "$menu" != *"Smart quota refresh"* && "$menu" != *"View logs"* \
+    && "$menu" != *"Version "* && "$menu" != *"Refresh now"* ]] || fail "the menu has items that moved to Settings or to icons: $menu"
+  [ "$(shell_eval "$IND.menu.box.get_children().flatMap(c => c.get_children()).flatMap(c => c.get_children ? c.get_children() : [])
+    .filter(b => b.style_class === 'claude-meter-action').map(b => b.accessible_name).join(', ')")" \
+    = '"Refresh now (Ctrl+R), Settings (Ctrl+,), Quit Claude Meter (Ctrl+Q)"' ] || fail "the menu lacks the Refresh, Settings and Quit icons"
+  echo "ok   the menu ends with Refresh, Settings and Quit icons"
   sleep 1
   screenshot "$DEV/actions.png" >/dev/null && echo "ok   screenshot: $DEV/actions.png"
 
@@ -447,13 +431,6 @@ checks() {
   wait_log 10 "Refresh now" || fail "Ctrl+R did not refresh"
   [ "$(shell_eval "$IND.menu.isOpen")" = true ] || fail "Ctrl+R closed the menu"
   echo "ok   Ctrl+R refreshes and leaves the menu open"
-
-  shell_eval "$IND.menu._getMenuItems().find(m => m.label && m.label.text === 'View logs').activate(null)" >/dev/null \
-    || fail "could not choose View logs"
-  for ((i = 0; i < 20; i++)); do grep -qxF "$CACHE/claude-meter.log" "$DEV/opened" 2>/dev/null && break; sleep 0.5; done
-  grep -qxF "$CACHE/claude-meter.log" "$DEV/opened" 2>/dev/null \
-    || fail "View logs did not open $CACHE/claude-meter.log: $(cat "$DEV/opened" 2>/dev/null)"
-  echo "ok   View logs opens the log in the default text editor"
 
   # Past 256 KB the log starts over, keeping the previous one as claude-meter.log.old.
   echo "old log" > "$CACHE/claude-meter.log.old"
@@ -467,7 +444,7 @@ checks() {
 
   # Smart quota refresh starts a new window through Claude Code once the last one ended.
   ended
-  shell_eval "$IND._smartSwitch.toggle()" >/dev/null || fail "could not turn on smart quota refresh"
+  shell_eval "$IND._settings.set_boolean('smart-quota-refresh', true)" >/dev/null || fail "could not turn on smart quota refresh"
   wait_claude 20 1 || fail "smart quota refresh did not run Claude Code: $(tail -3 "$CACHE/claude-meter.log")"
   expected=$(printf '%s\n' "cwd=$CACHE" 'arg=-p' 'arg=Reply with OK.' 'arg=--model' 'arg=haiku' 'arg=--tools' 'arg=' \
     'arg=--no-session-persistence' 'arg=--strict-mcp-config' 'arg=--disable-slash-commands' 'arg=--settings' \
@@ -489,13 +466,12 @@ checks() {
   wait_claude 20 2 || fail "smart quota refresh did not try again"
   wait_log 10 "failed: not logged in" || fail "the failure is not in the log: $(tail -3 "$CACHE/claude-meter.log")"
   menu=$(menu_dump) || fail "menu: $menu"
-  expect "$menu" "Could not start a window - see View logs[claude-meter-footer claude-meter-hint]"
+  expect "$menu" "Could not start a window - see the log in Settings[claude-meter-footer]"
   shell_eval "$IND._refresh(); true" >/dev/null
   sleep 1
   wait_claude 1 2 || fail "smart quota refresh retried a failure right away"
   rm "$DEV/claude.fail"
   shell_eval "$IND._settings.set_boolean('smart-quota-refresh', false)" >/dev/null
-  [ "$(shell_eval "$IND._smartSwitch.state")" = false ] || fail "the switch did not follow the setting"
   echo "ok   a failed smart quota refresh is shown and not retried right away"
 
   shell_eval "$IND._settings.set_boolean('show-session', false)" >/dev/null

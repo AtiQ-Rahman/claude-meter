@@ -76,7 +76,7 @@ claude.ai does not document this data, so it can change without notice. If the p
 
 Live Claude usage in your GNOME top bar, like a system monitor for your Claude limits.
 
-![Claude Meter in the GNOME top bar with its menu open](screenshot.png)
+![Claude Meter in the GNOME top bar with its menu open: session and week usage, then Refresh, Settings and Quit icons](screenshot.png)
 
 ```
 ✳ S 38%  W 35%
@@ -147,22 +147,19 @@ Each alert fires once per limit window, and the count starts over when the limit
 
 ### Menu
 
-Below the usage rows:
+The last row of the menu says when the reading is from, then has three icons:
 
-| Item | Shortcut | What it does |
+| Icon | Shortcut | What it does |
 | --- | --- | --- |
-| **Refresh now** | Ctrl+R | Reads the usage files again and, with [Plan and model limits](#plan-and-model-limits) on, asks for them right away. The menu stays open. |
-| **Smart quota refresh** | | Turns [Smart quota refresh](#smart-quota-refresh) on or off. The line below it says what it last did. |
-| **Settings…** | Ctrl+, | Opens the settings window |
-| **View logs** | | Opens the log in your text editor |
-| **Version** | | The version you're running |
-| **Quit Claude Meter** | Ctrl+Q | Hides Claude Meter until you log in again. To bring it back sooner, switch it off and on in the Extensions app. |
+| **Refresh** | Ctrl+R | Reads the usage files again and, with [Plan and model limits](#plan-and-model-limits) on, asks for them right away. The menu stays open. |
+| **Settings** | Ctrl+, | Opens the settings window |
+| **Quit** | Ctrl+Q | Hides Claude Meter until you log in again. To bring it back sooner, switch it off and on in the Extensions app. |
 
-The shortcuts work while the menu is open.
+The shortcuts work while the menu is open. With [Smart quota refresh](#smart-quota-refresh) on, a line above that row says what it last did.
 
 ### Settings
 
-Choose **Settings…** in the menu, or open Claude Meter's settings in the Extensions app:
+Click the Settings icon in the menu, or open Claude Meter's settings in the Extensions app:
 
 - **Show Session (S)** / **Show Week (W)**: show or hide each value in the top bar
 - **Position in top bar**: Left, Center or Right
@@ -180,7 +177,7 @@ Claude Code's status line only reports the session and weekly limits. Turn on **
 
 - your plan, for example `Max (5x)`, next to the update time
 - weekly limits that apply to one model, for example **Week · Fable**, with the same alerts as session and week. When one is at 90% or more, the indicator turns red even if session and week are fine.
-- extra usage: how much of your monthly extra-usage limit you've spent, or why it's off
+- extra usage: how much of your monthly extra-usage limit you've spent, while it's turned on
 
 These come from one of two places, whichever reported last:
 
@@ -203,7 +200,7 @@ claude -p "Reply with OK." --model haiku --tools "" --no-session-persistence \
 That is the smallest model, with no tools, MCP servers, hooks or slash commands, and nothing saved to Claude Code's history. It counts toward your usage like any message, but it is tiny. Claude Code uses its own login, and renews it when needed.
 
 - It needs Claude Code, as `claude` on your PATH or in `~/.local/bin`.
-- It sends at most one message per window. If one fails, it tries again after 30 minutes, and the line under the switch says what went wrong. [View logs](#logs) has the details.
+- It sends at most one message per window. If one fails, it tries again after 30 minutes, and a line in the menu says what went wrong. [The log](#logs) has the details.
 - It knows a window ended from the last reading of Claude Code, the browser extension or the usage API. If you used Claude elsewhere in the meantime, at worst one message is sent into a window that was already running.
 - GNOME turns extensions off while the screen is locked, so it starts the window once you unlock.
 
@@ -211,7 +208,7 @@ It is off by default.
 
 ### Logs
 
-**View logs** opens `~/.cache/claude-meter/claude-meter.log`: when Claude Meter started, alerts, each request to the usage API and its outcome, and what Smart quota refresh did. Past 256 KB it starts over and keeps the previous log as `claude-meter.log.old`.
+**View logs** in Settings opens `~/.cache/claude-meter/claude-meter.log`: when Claude Meter started, alerts, each request to the usage API and its outcome, and what Smart quota refresh did. Past 256 KB it starts over and keeps the previous log as `claude-meter.log.old`.
 
 ### Terminal status line
 

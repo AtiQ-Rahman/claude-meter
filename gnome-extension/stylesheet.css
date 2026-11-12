@@ -17,5 +17,7 @@
 .claude-meter-fill-stale { background-color: rgba(255, 255, 255, 0.35); }
 .claude-meter-footer { color: rgba(255, 255, 255, 0.5); font-size: 0.85em; }
 .claude-meter-panel-crit { background-color: rgba(255, 70, 70, 0.3); border-radius: 10px; padding: 0 8px; }
-.claude-meter-shortcut { color: rgba(255, 255, 255, 0.5); }
-.claude-meter-hint { padding-left: 12px; }
+.claude-meter-actions { spacing: 6px; padding-left: 12px; }
+.claude-meter-action { padding: 8px; border-radius: 99px; background-color: rgba(255, 255, 255, 0.08); }
+.claude-meter-action:hover, .claude-meter-action:focus { background-color: rgba(255, 255, 255, 0.18); }
+.claude-meter-action:active { background-color: rgba(255, 255, 255, 0.25); }

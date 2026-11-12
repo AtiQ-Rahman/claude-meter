@@ -6,9 +6,13 @@
 
 import Adw from 'gi://Adw';
 import Gio from 'gi://Gio';
+import GLib from 'gi://GLib';
 import Gtk from 'gi://Gtk';
 
 import {ExtensionPreferences} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
+
+// The log the extension writes: when it started, alerts, usage API requests, smart quota refresh.
+const LOG_FILE = GLib.build_filenamev([GLib.get_user_cache_dir(), 'claude-meter', 'claude-meter.log']);
 
 const POSITIONS = [['left', 'Left'], ['center', 'Center'], ['right', 'Right']];
 
@@ -39,6 +43,26 @@ function positionRow(settings) {
     return row;
 }
 
+// Opens the log in the default text editor, creating it should nothing have been logged yet.
+function logsRow() {
+    const row = new Adw.ActionRow({ title: 'View logs', subtitle: LOG_FILE.replace(GLib.get_home_dir(), '~') });
+    const button = new Gtk.Button({ label: 'Open', valign: Gtk.Align.CENTER });
+    button.connect('clicked', () => {
+        try {
+            if (!GLib.file_test(LOG_FILE, GLib.FileTest.EXISTS)) {
+                GLib.mkdir_with_parents(GLib.path_get_dirname(LOG_FILE), 0o755);
+                GLib.file_set_contents(LOG_FILE, '');
+            }
+            Gio.AppInfo.launch_default_for_uri(GLib.filename_to_uri(LOG_FILE, null), null);
+        } catch (e) {
+            row.subtitle = `Could not open ${LOG_FILE}: ${e.message}`;
+        }
+    });
+    row.add_suffix(button);
+    row.activatable_widget = button;
+    return row;
+}
+
 export default class ClaudeMeterPreferences extends ExtensionPreferences {
     fillPreferencesWindow(window) {
         const settings = this.getSettings();
@@ -58,6 +82,16 @@ export default class ClaudeMeterPreferences extends ExtensionPreferences {
         usage.add(switchRow(settings, 'smart-quota-refresh', 'Smart quota refresh',
             'Starts a new 5-hour window as soon as one ends, with one tiny message through Claude Code'));
         page.add(usage);
+
+        const about = new Adw.PreferencesGroup({ title: 'About' });
+        const version = new Adw.ActionRow({ title: 'Version' });
+        version.add_suffix(new Gtk.Label({
+            label: String(this.metadata['version-name'] || this.metadata.version || ''),
+            css_classes: ['dim-label'],
+        }));
+        about.add(version);
+        about.add(logsRow());
+        page.add(about);
 
         window.add(page);
     }
