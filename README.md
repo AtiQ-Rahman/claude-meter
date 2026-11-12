@@ -167,7 +167,7 @@ Click the Settings icon in the menu, or open Claude Meter's settings in the Exte
 - **Plan and model limits**: add your plan, per-model weekly limits and extra usage to the menu (off by default, see below)
 - **Smart quota refresh**: start a new session window as soon as one ends (off by default, see below)
 
-![Toggling Session, Week and alerts on and off from the Settings menu](demo.gif)
+<img src="settings.png" alt="Claude Meter settings: Show Session, Show Week, position, usage alerts, plan and model limits, smart quota refresh, version and View logs" width="480">
 
 Settings are kept in GSettings, under `/org/gnome/shell/extensions/claude-meter/`. Versions before 1.0.0 kept them in `~/.config/claude-meter/settings.json`; the first start of a newer version moves them over and removes that file.
 
