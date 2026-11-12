@@ -135,7 +135,7 @@ ICON = Image.open(os.path.join(REPO, "browser-extension/icons/128.png")).convert
 POPUP = shot("browser-extension/screenshots/popup.png", 2.1)
 HIST = shot("browser-extension/screenshots/settings-history.png", 1.25)
 SETT = shot("browser-extension/screenshots/settings.png", 1.25)
-GNOME = shot("screenshot.png", 1.5)
+GNOME = shot("screenshot.png", 1.4)
 GSETT = shot("settings.png", 0.98)
 CARDS = [
     card("Session at 80%", "Heads up, you've used most of it", YELLOW),
@@ -230,7 +230,7 @@ def s_gnome(c, t):
     caption(c, t, "On Linux? See it in your GNOME top bar too", 0.0, 110)
     p = ease_out(prog(t, 0.4, 0.7))
     paste(c, GNOME, 600 - (1 - p) * 200, 470, p)
-    paste(c, text_img("Refresh, Settings and Quit, one click away", 34, MUTED, "R"), 600, 790, ease_out(prog(t, 1.0, 0.6)))
+    paste(c, text_img("Per-model limits like Fable, and one-click actions", 34, MUTED, "R"), 600, 800, ease_out(prog(t, 1.0, 0.6)))
     q = ease_out(prog(t, 1.4, 0.7))
     paste(c, GSETT, 1390 + (1 - q) * 200, 600, q)
     caption(c, t, "Smart quota refresh starts a new 5-hour window as soon as one ends", 2.6, 1010, 36, ORANGE, "M")

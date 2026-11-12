@@ -76,7 +76,7 @@ claude.ai does not document this data, so it can change without notice. If the p
 
 Live Claude usage in your GNOME top bar, like a system monitor for your Claude limits.
 
-![Claude Meter in the GNOME top bar with its menu open: session and week usage, then Refresh, Settings and Quit icons](screenshot.png)
+![Claude Meter in the GNOME top bar with its menu open: session, week and Week · Fable usage, then Refresh, Settings and Quit icons](screenshot.png)
 
 ```
 ✳ S 38%  W 35%
