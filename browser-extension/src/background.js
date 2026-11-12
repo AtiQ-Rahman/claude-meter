@@ -7,7 +7,7 @@ import { recordSample, forecast } from './forecast.js';
 import { decideAlerts } from './alerts.js';
 import { updateCosts, messagesLeft } from './estimate.js';
 import { inQuietHours } from './quiet.js';
-import { ringIcon } from './icon.js';
+import { ringIcon, staticIconData } from './icon.js';
 import { formatDuration, formatClock, isWeekly, level } from './format.js';
 
 const NAME = 'Usage Meter for Claude';
@@ -16,7 +16,6 @@ const MIN_GAP_MS = 15 * 1000;
 const TIMELINE_STEP_MS = 15 * 60 * 1000;
 const TIMELINE_KEEP_MS = 7 * 24 * 60 * 60 * 1000;
 const BADGE_COLORS = { ok: '#2e7d32', warn: '#b7791f', crit: '#d32f2f', error: '#6b7280' };
-const STATIC_ICON = { 16: 'icons/16.png', 32: 'icons/32.png' };
 
 let running = null;
 let lastRun = 0;
@@ -41,7 +40,7 @@ async function doRefresh() {
   } catch (e) {
     const error = { kind: e.kind || 'network', message: e.message, at: now, details: e.details || null };
     await chrome.storage.local.set({ error });
-    await chrome.action.setIcon({ path: STATIC_ICON });
+    await setToolbarIcon(null);
     await setBadge('!', BADGE_COLORS.error, error.kind === 'auth'
       ? `${NAME}: log in to claude.ai to see your usage`
       : `${NAME}: ${error.message}`);
@@ -101,7 +100,16 @@ async function updateToolbar(usage, settings) {
   const title = [NAME, ...ws.map(w => `${w.label}: ${w.pct}%`)].join('\n');
   const text = settings.badge === 'none' ? '' : shown.pct >= 100 ? '100' : `${shown.pct}%`;
   await setBadge(text, BADGE_COLORS[lv], title);
-  await chrome.action.setIcon(settings.iconRing ? { imageData: ringIcon(shown.pct, lv) } : { path: STATIC_ICON });
+  await setToolbarIcon(settings.iconRing ? ringIcon(shown.pct, lv) : null);
+}
+
+// A failed icon change should never stop a refresh; the badge still shows the numbers.
+async function setToolbarIcon(imageData) {
+  try {
+    await chrome.action.setIcon({ imageData: imageData || await staticIconData() });
+  } catch (e) {
+    console.warn('Could not set the toolbar icon:', e);
+  }
 }
 
 // Check again right after each limit resets, so the reset notice is on time.

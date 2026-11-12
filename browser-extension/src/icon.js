@@ -28,3 +28,22 @@ export function ringIcon(pct, lv) {
   const color = COLORS[lv] || COLORS.ok;
   return { 16: ring(16, pct, color), 32: ring(32, pct, color) };
 }
+
+// The plain logo, loaded once as image data. setIcon({ path }) fetches the file
+// itself and fails in some browsers (seen in Brave), so we fetch it ourselves.
+let staticIcon = null;
+
+async function load(size) {
+  const blob = await (await fetch(chrome.runtime.getURL(`icons/${size}.png`))).blob();
+  const bitmap = await createImageBitmap(blob);
+  const g = new OffscreenCanvas(size, size).getContext('2d');
+  g.drawImage(bitmap, 0, 0, size, size);
+  return g.getImageData(0, 0, size, size);
+}
+
+export async function staticIconData() {
+  staticIcon ??= Promise.all([load(16), load(32)])
+    .then(([a, b]) => ({ 16: a, 32: b }))
+    .catch(e => { staticIcon = null; throw e; });
+  return staticIcon;
+}
