@@ -11,8 +11,13 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   return true;
 });
 
+// After the extension is reloaded or updated, this script stays in open tabs but can no
+// longer reach it: chrome.runtime.id is gone and sendMessage throws instead of rejecting.
 function send(message) {
-  chrome.runtime.sendMessage(message).catch(() => {});
+  if (!chrome.runtime?.id) return;
+  try {
+    chrome.runtime.sendMessage(message).catch(() => {});
+  } catch {}
 }
 
 // Reply streaming takes a while; check after it has likely finished.
@@ -109,6 +114,7 @@ function span(cls, text) {
 }
 
 async function renderMeter() {
+  if (!chrome.runtime?.id) return;
   const { settings } = await chrome.storage.sync.get('settings');
   const s = { ...DEFAULTS, ...(settings || {}) };
   const { usage } = await chrome.storage.local.get('usage');
