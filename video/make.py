@@ -135,7 +135,8 @@ ICON = Image.open(os.path.join(REPO, "browser-extension/icons/128.png")).convert
 POPUP = shot("browser-extension/screenshots/popup.png", 2.1)
 HIST = shot("browser-extension/screenshots/settings-history.png", 1.25)
 SETT = shot("browser-extension/screenshots/settings.png", 1.25)
-GNOME = shot("screenshot.png", 1.75)
+GNOME = shot("screenshot.png", 1.5)
+GSETT = shot("settings.png", 0.98)
 CARDS = [
     card("Session at 80%", "Heads up, you've used most of it", YELLOW),
     card("Session at 90%", "Stays on screen until you dismiss it", RED),
@@ -226,9 +227,13 @@ def s_history(c, t):
     paste(c, SETT, 1360 + (1 - q) * 300, 620, q)
 
 def s_gnome(c, t):
-    caption(c, t, "On Linux? See it in your GNOME top bar too", 0.0, 160)
+    caption(c, t, "On Linux? See it in your GNOME top bar too", 0.0, 110)
     p = ease_out(prog(t, 0.4, 0.7))
-    paste(c, GNOME, W / 2, 590 + (1 - p) * 60, p)
+    paste(c, GNOME, 600 - (1 - p) * 200, 470, p)
+    paste(c, text_img("Refresh, Settings and Quit, one click away", 34, MUTED, "R"), 600, 790, ease_out(prog(t, 1.0, 0.6)))
+    q = ease_out(prog(t, 1.4, 0.7))
+    paste(c, GSETT, 1390 + (1 - q) * 200, 600, q)
+    caption(c, t, "Smart quota refresh starts a new 5-hour window as soon as one ends", 2.6, 1010, 36, ORANGE, "M")
 
 def s_private(c, t):
     words = [("No servers.", 0.3), ("No analytics.", 0.9), ("No account.", 1.5)]
@@ -252,7 +257,7 @@ SCENES = [
     ("popup", 6.0, s_popup),
     ("alerts", 6.6, s_alerts),
     ("history", 5.0, s_history),
-    ("gnome", 4.4, s_gnome),
+    ("gnome", 6.4, s_gnome),
     ("private", 4.6, s_private),
     ("outro", 5.6, s_outro),
 ]
@@ -419,6 +424,8 @@ def build_audio():
     # gnome
     put(whoosh(0.6), S["gnome"] + 0.3, 0.7)
     put(pop(), S["gnome"] + 0.8, 0.6)
+    put(whoosh(0.6), S["gnome"] + 1.3, 0.6)
+    put(pop(), S["gnome"] + 2.6, 0.5)
     # private
     for st in (0.3, 0.9, 1.5): put(thud(), S["private"] + st, 0.45)
     # outro
@@ -453,4 +460,9 @@ if __name__ == "__main__":
         ff.stdin.write(render_frame(i / FPS).tobytes())
         if i % 150 == 0: print(f"frame {i}/{nframes}", flush=True)
     ff.stdin.close(); ff.wait()
-    print("done", out)
+    gif = os.path.join(OUT, "usage-meter-for-claude.gif")
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", out, "-vf",
+        "fps=12,scale=720:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=128[p];[b][p]paletteuse=dither=bayer:bayer_scale=4",
+        gif], check=True)
+    os.remove(audio)
+    print("done", out, gif)
